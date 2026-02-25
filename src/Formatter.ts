@@ -35,9 +35,7 @@ function isArrayOfObjects(value: unknown): value is Record<string, unknown>[] {
 
 /** Renders an aligned markdown table from headers and rows. */
 function table(headers: string[], rows: string[][]): string {
-  const widths = headers.map((h, i) =>
-    Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)),
-  )
+  const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
   const pad = (s: string, i: number) => s.padEnd(widths[i]!)
   const headerRow = `| ${headers.map(pad).join(' | ')} |`
   const sep = `|${widths.map((w) => '-'.repeat(w + 2)).join('|')}|`
@@ -48,13 +46,19 @@ function table(headers: string[], rows: string[][]): string {
 /** Renders a key-value table from a flat object. */
 function kvTable(obj: Record<string, unknown>): string {
   const entries = Object.entries(obj)
-  return table(['Key', 'Value'], entries.map(([k, v]) => [k, String(v)]))
+  return table(
+    ['Key', 'Value'],
+    entries.map(([k, v]) => [k, String(v)]),
+  )
 }
 
 /** Renders a columnar table from an array of objects. */
 function columnarTable(items: Record<string, unknown>[]): string {
   const keys = [...new Set(items.flatMap(Object.keys))]
-  return table(keys, items.map((item) => keys.map((k) => String(item[k] ?? ''))))
+  return table(
+    keys,
+    items.map((item) => keys.map((k) => String(item[k] ?? ''))),
+  )
 }
 
 /** Formats a value as Markdown, recursing into nested objects. */

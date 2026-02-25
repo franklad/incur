@@ -174,9 +174,9 @@ cli.command('greet', {
 
 **TDD cycles (Cli.test.ts — --llms):**
 10. `cli.serve(['--llms'])` → YAML manifest with all commands (default format)
-11. Manifest includes `inputSchema` and `outputSchema` per command
+11. Manifest includes `schema.input` and `schema.output` per command
 12. Manifest includes `annotations` per command
-13. Manifest includes `schemaVersion: 'clac.v1'`
+13. Manifest includes `version: 'clac.v1'`
 14. Nested group commands appear with full path (e.g. `pr list`)
 
 **Files created:** `Schema.ts`, `Schema.test.ts`
