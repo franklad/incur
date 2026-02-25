@@ -5,9 +5,7 @@ export function parse<
   const args extends z.ZodObject<any> | undefined = undefined,
   const options extends z.ZodObject<any> | undefined = undefined,
 >(argv: string[], options: parse.Options<args, options> = {}): parse.ReturnType<args, options> {
-  const argsSchema = options.args
-  const optionsSchema = options.options
-  const alias = options.alias
+  const { args: argsSchema, options: optionsSchema, alias } = options
 
   // Build reverse alias map: short char → long name
   const aliasToName = new Map<string, string>()
