@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import type { z } from 'zod'
 import type { FieldError } from './Errors.js'
 import { ClacError, ValidationError } from './Errors.js'
 import * as Formatter from './Formatter.js'
@@ -7,6 +7,7 @@ import type { OneOf } from './internal/types.js'
 import * as Parser from './Parser.js'
 import type { Register } from './Register.js'
 import * as Schema from './Schema.js'
+import * as Skill from './Skill.js'
 
 /** A CLI application instance. Also used as a command group when mounted on a parent CLI. */
 export type Cli<commands extends CommandsMap = {}> = {
@@ -81,7 +82,11 @@ export type Cta<commands extends CommandsMap = Commands> =
                 description?: string | undefined
                 /** Named options formatted as `--key value` flags. */
                 options?:
-                  | { [key in keyof commands[name]['options']]?: commands[name]['options'][key] | true }
+                  | {
+                      [key in keyof commands[name]['options']]?:
+                        | commands[name]['options'][key]
+                        | true
+                    }
                   | undefined
               }
             }[keyof commands & string]
@@ -121,7 +126,10 @@ export function create<
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodObject<any> | undefined = undefined,
 >(definition: create.Options<args, opts, output> & { name: string }): Cli
-export function create(nameOrDefinition: string | (any & { name: string }), definition?: any): Cli | Root {
+export function create(
+  nameOrDefinition: string | (any & { name: string }),
+  definition?: any,
+): Cli | Root {
   const name = typeof nameOrDefinition === 'string' ? nameOrDefinition : nameOrDefinition.name
   const def = typeof nameOrDefinition === 'string' ? (definition ?? {}) : nameOrDefinition
   if ('run' in def) {
@@ -212,7 +220,12 @@ export declare namespace create {
       /** Return a success result with optional metadata (e.g. CTAs). */
       ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
       /** Return an error result with optional CTAs. */
-      error: (options: { code: string; message: string; retryable?: boolean; cta?: CtaBlock }) => never
+      error: (options: {
+        code: string
+        message: string
+        retryable?: boolean
+        cta?: CtaBlock
+      }) => never
       options: InferOutput<options>
     }) => InferReturn<output> | Promise<InferReturn<output>>
     /** The CLI version string. */
@@ -243,7 +256,16 @@ async function serveImpl(
   const stdout = options.stdout ?? ((s: string) => process.stdout.write(s))
   const exit = options.exit ?? ((code: number) => process.exit(code))
 
-  const { verbose, format, formatExplicit, llms, help, version, tty: ttyFlag, rest: filtered } = extractBuiltinFlags(argv)
+  const {
+    verbose,
+    format,
+    formatExplicit,
+    llms,
+    help,
+    version,
+    tty: ttyFlag,
+    rest: filtered,
+  } = extractBuiltinFlags(argv)
 
   // TTY mode: human is at the terminal; suppress structured output unless overridden
   const tty = ttyFlag ?? options.tty ?? process.stdout.isTTY ?? false
@@ -254,7 +276,30 @@ async function serveImpl(
   }
 
   if (llms) {
-    writeln(Formatter.format(buildManifest(commands), format))
+    // Scope to a subtree if command tokens are provided
+    let scopedCommands = commands
+    const prefix: string[] = []
+    for (const token of filtered) {
+      const entry = scopedCommands.get(token)
+      if (!entry) break
+      if (isGroup(entry)) {
+        scopedCommands = entry.commands
+        prefix.push(token)
+      } else {
+        // Leaf command — scope to just this command
+        scopedCommands = new Map([[token, entry]])
+        break
+      }
+    }
+
+    if (!formatExplicit || format === 'md') {
+      const groups = new Map<string, string>()
+      const cmds = collectSkillCommands(scopedCommands, prefix, groups)
+      const scopedName = prefix.length > 0 ? `${name} ${prefix.join(' ')}` : name
+      writeln(Skill.generate(scopedName, cmds, groups))
+      return
+    }
+    writeln(Formatter.format(buildManifest(scopedCommands, prefix), format))
     return
   }
 
@@ -324,7 +369,11 @@ async function serveImpl(
     else writeln(Formatter.format(output.error, format))
   }
 
-  function writeError(message: string, commandPath: string) {
+  if ('error' in resolved) {
+    const helpCmd = resolved.path
+      ? `${name} ${resolved.path} --help`
+      : `${name} --help`
+    const message = `'${resolved.error}' is not a command. See '${helpCmd}' for a list of available commands.`
     if (human) {
       writeln(formatHumanError({ code: 'COMMAND_NOT_FOUND', message }))
       exit(1)
@@ -334,15 +383,11 @@ async function serveImpl(
       ok: false,
       error: { code: 'COMMAND_NOT_FOUND', message },
       meta: {
-        command: commandPath,
+        command: resolved.error,
         duration: `${Math.round(performance.now() - start)}ms`,
       },
     })
     exit(1)
-  }
-
-  if ('error' in resolved) {
-    writeError(resolved.error, resolved.path)
     return
   }
 
@@ -357,9 +402,12 @@ async function serveImpl(
     const okFn = (data: unknown, meta: { cta?: CtaBlock } = {}): never => {
       return { [sentinel]: 'ok', data, cta: meta.cta } as never
     }
-    const errorFn = (
-      opts: { code: string; message: string; retryable?: boolean; cta?: CtaBlock },
-    ): never => {
+    const errorFn = (opts: {
+      code: string
+      message: string
+      retryable?: boolean
+      cta?: CtaBlock
+    }): never => {
       return { [sentinel]: 'error', ...opts } as never
     }
 
@@ -437,7 +485,7 @@ function resolveCommand(
   const [first, ...rest] = tokens
 
   if (!first || !commands.has(first))
-    return { error: `Unknown command: ${first ?? '(none)'}`, path: first ?? '' }
+    return { error: first ?? '(none)', path: '' }
 
   let entry = commands.get(first)!
   const path = [first]
@@ -455,8 +503,7 @@ function resolveCommand(
 
     const child = entry.commands.get(next)
     if (!child) {
-      const available = [...entry.commands.keys()].sort().join(', ')
-      return { error: `Unknown subcommand: ${next}. Available: ${available}`, path: path.join(' ') }
+      return { error: next, path: path.join(' ') }
     }
 
     path.push(next)
@@ -574,14 +621,17 @@ type CtaBlock<commands extends CommandsMap = Commands> = {
 }
 
 /** @internal Formats an error for human-readable TTY output. */
-function formatHumanError(error: { code: string; message: string; fieldErrors?: FieldError[] | undefined }): string {
-  const prefix = error.code === 'UNKNOWN' || error.code === 'COMMAND_NOT_FOUND'
-    ? 'Error'
-    : `Error (${error.code})`
+function formatHumanError(error: {
+  code: string
+  message: string
+  fieldErrors?: FieldError[] | undefined
+}): string {
+  const prefix =
+    error.code === 'UNKNOWN' || error.code === 'COMMAND_NOT_FOUND'
+      ? 'Error'
+      : `Error (${error.code})`
   let out = `${prefix}: ${error.message}`
-  if (error.fieldErrors)
-    for (const fe of error.fieldErrors)
-      out += `\n  ${fe.path}: ${fe.message}`
+  if (error.fieldErrors) for (const fe of error.fieldErrors) out += `\n  ${fe.path}: ${fe.message}`
   return out
 }
 
@@ -613,10 +663,10 @@ function formatCta(name: string, cta: Cta): FormattedCta {
 }
 
 /** @internal Builds the `--llms` manifest from the command tree. */
-function buildManifest(commands: Map<string, CommandEntry>) {
+function buildManifest(commands: Map<string, CommandEntry>, prefix: string[] = []) {
   return {
     version: 'clac.v1',
-    commands: collectCommands(commands, []).sort((a, b) => a.name.localeCompare(b.name)),
+    commands: collectCommands(commands, prefix).sort((a, b) => a.name.localeCompare(b.name)),
   }
 }
 
@@ -643,7 +693,8 @@ function collectCommands(
       const outputSchema = entry.output ? Schema.toJsonSchema(entry.output) : undefined
       if (inputSchema || outputSchema) {
         cmd.schema = {}
-        if (inputSchema) cmd.schema.input = inputSchema
+        if (inputSchema?.args) cmd.schema.args = inputSchema.args
+        if (inputSchema?.options) cmd.schema.options = inputSchema.options
         if (outputSchema) cmd.schema.output = outputSchema
       }
 
@@ -653,6 +704,32 @@ function collectCommands(
     }
   }
   return result
+}
+
+/** @internal Recursively collects leaf commands as `Skill.CommandInfo` for `--llms --format md`. */
+function collectSkillCommands(
+  commands: Map<string, CommandEntry>,
+  prefix: string[],
+  groups: Map<string, string>,
+): Skill.CommandInfo[] {
+  const result: Skill.CommandInfo[] = []
+  for (const [name, entry] of commands) {
+    const path = [...prefix, name]
+    if (isGroup(entry)) {
+      if (entry.description) groups.set(path.join(' '), entry.description)
+      result.push(...collectSkillCommands(entry.commands, path, groups))
+    } else {
+      const cmd: Skill.CommandInfo = { name: path.join(' ') }
+      if (entry.description) cmd.description = entry.description
+      if (entry.args) cmd.args = entry.args
+      if (entry.options) cmd.options = entry.options
+      if (entry.output) cmd.output = entry.output
+      const annotations = buildAnnotations(entry)
+      if (annotations) cmd.annotations = annotations
+      result.push(cmd)
+    }
+  }
+  return result.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /** @internal Extracts annotation flags from a command definition, mapped to MCP-style keys. */
@@ -680,17 +757,16 @@ function buildAnnotations(
   return has ? map : undefined
 }
 
-/** @internal Merges args + options schemas into a single input JSON Schema. */
+/** @internal Builds separate args and options JSON Schemas. */
 function buildInputSchema(
   args: z.ZodObject<any> | undefined,
   options: z.ZodObject<any> | undefined,
-): Record<string, unknown> | undefined {
+): { args?: Record<string, unknown>; options?: Record<string, unknown> } | undefined {
   if (!args && !options) return undefined
-  const merged = z.object({
-    ...(args?.shape ?? {}),
-    ...(options?.shape ?? {}),
-  })
-  return Schema.toJsonSchema(merged)
+  const result: { args?: Record<string, unknown>; options?: Record<string, unknown> } = {}
+  if (args) result.args = Schema.toJsonSchema(args)
+  if (options) result.options = Schema.toJsonSchema(options)
+  return result
 }
 
 /** @internal Inferred output type of a Zod schema, or `{}` when the schema is not provided. */
@@ -775,7 +851,12 @@ type CommandDefinition<
     /** Return a success result with optional metadata (e.g. CTAs). */
     ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
     /** Return an error result with optional CTAs. */
-    error: (options: { code: string; message: string; retryable?: boolean; cta?: CtaBlock }) => never
+    error: (options: {
+      code: string
+      message: string
+      retryable?: boolean
+      cta?: CtaBlock
+    }) => never
     options: InferOutput<options>
   }): InferReturn<output> | Promise<InferReturn<output>>
 }

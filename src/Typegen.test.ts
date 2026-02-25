@@ -1,4 +1,4 @@
-import { Cli, Codegen, z } from 'clac'
+import { Cli, Typegen, z } from 'clac'
 
 describe('fromCli', () => {
   test('simple commands with args and options', () => {
@@ -12,7 +12,7 @@ describe('fromCli', () => {
         run: () => ({}),
       })
 
-    expect(Codegen.fromCli(cli)).toMatchInlineSnapshot(`
+    expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
       "declare module 'clac' {
         interface Register {
           commands: {
@@ -28,7 +28,7 @@ describe('fromCli', () => {
   test('command with no args or options', () => {
     const cli = Cli.create('test').command('ping', { run: () => ({}) })
 
-    expect(Codegen.fromCli(cli)).toMatchInlineSnapshot(`
+    expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
       "declare module 'clac' {
         interface Register {
           commands: {
@@ -53,7 +53,7 @@ describe('fromCli', () => {
       })
     cli.command(pr)
 
-    expect(Codegen.fromCli(cli)).toMatchInlineSnapshot(`
+    expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
       "declare module 'clac' {
         interface Register {
           commands: {
@@ -76,7 +76,7 @@ describe('fromCli', () => {
     pr.command(review)
     cli.command(pr)
 
-    expect(Codegen.fromCli(cli)).toMatchInlineSnapshot(`
+    expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
       "declare module 'clac' {
         interface Register {
           commands: {
@@ -94,7 +94,7 @@ describe('fromCli', () => {
       run: () => ({}),
     })
 
-    const output = Codegen.fromCli(cli)
+    const output = Typegen.fromCli(cli)
     expect(output).toContain('"open" | "closed" | "merged"')
   })
 
@@ -104,7 +104,7 @@ describe('fromCli', () => {
       run: () => ({}),
     })
 
-    const output = Codegen.fromCli(cli)
+    const output = Typegen.fromCli(cli)
     expect(output).toContain('verbose: boolean')
   })
 
@@ -114,7 +114,7 @@ describe('fromCli', () => {
       run: () => ({}),
     })
 
-    const output = Codegen.fromCli(cli)
+    const output = Typegen.fromCli(cli)
     expect(output).toContain('tags: string[]')
   })
 
@@ -124,7 +124,7 @@ describe('fromCli', () => {
       .command('alpha', { run: () => ({}) })
       .command('middle', { run: () => ({}) })
 
-    const output = Codegen.fromCli(cli)
+    const output = Typegen.fromCli(cli)
     const commandOrder = [...output.matchAll(/^ {6}'(\w+)':/gm)].map((m) => m[1])
     expect(commandOrder).toEqual(['alpha', 'middle', 'zebra'])
   })
@@ -135,7 +135,7 @@ describe('fromCli', () => {
     const pr = Cli.create('pr').command('list', { run: () => ({}) })
     cli.command(pr)
 
-    expect(Codegen.fromCli(cli)).toMatchInlineSnapshot(`
+    expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
       "declare module 'clac' {
         interface Register {
           commands: {

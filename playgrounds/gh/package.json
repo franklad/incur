@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check:types": "tsc",
     "gh": "node --import tsx cli.ts",
-    "check:types": "tsc"
+    "gen:skills": "node --import tsx ../../src/bin.ts gen skills",
+    "gen:types": "node --import tsx ../../src/bin.ts gen types"
   },
   "dependencies": {
     "clac": "workspace:*"

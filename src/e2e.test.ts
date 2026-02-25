@@ -1,0 +1,1391 @@
+import { Cli, Errors, Typegen, z } from 'clac'
+
+describe('routing', () => {
+  test('top-level command', async () => {
+    const { output } = await serve(createApp(), ['ping'])
+    expect(output).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
+  })
+
+  test('group command', async () => {
+    const { output } = await serve(createApp(), ['auth', 'logout'])
+    expect(output).toMatchInlineSnapshot(`
+      "loggedOut: true
+      "
+    `)
+  })
+
+  test('nested group command (3 levels deep)', async () => {
+    const { output } = await serve(createApp(), ['project', 'deploy', 'status', 'd-456'])
+    expect(output).toMatchInlineSnapshot(`
+      "deployId: d-456
+      status: running
+      progress: 75
+      "
+    `)
+  })
+
+  test('mounted leaf CLI as single command', async () => {
+    const { output } = await serve(createApp(), ['config'])
+    expect(output).toMatchInlineSnapshot(`
+      "apiUrl: "https://api.example.com"
+      timeout: 30
+      debug: false
+      "
+    `)
+  })
+
+  test('mounted leaf CLI with args', async () => {
+    const { output } = await serve(createApp(), ['config', 'apiUrl'])
+    expect(output).toMatchInlineSnapshot(`
+      "key: apiUrl
+      value: some-value
+      "
+    `)
+  })
+
+  test('unknown top-level command', async () => {
+    const { output, exitCode } = await serve(createApp(), ['nonexistent'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: COMMAND_NOT_FOUND
+      message: 'nonexistent' is not a command. See 'app --help' for a list of available commands.
+      "
+    `)
+  })
+
+  test('unknown subcommand lists available', async () => {
+    const { output, exitCode } = await serve(createApp(), ['auth', 'whoami'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: COMMAND_NOT_FOUND
+      message: 'whoami' is not a command. See 'app auth --help' for a list of available commands.
+      "
+    `)
+  })
+
+  test('unknown nested subcommand', async () => {
+    const { output, exitCode } = await serve(createApp(), ['project', 'deploy', 'nope'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: COMMAND_NOT_FOUND
+      message: 'nope' is not a command. See 'app project deploy --help' for a list of available commands.
+      "
+    `)
+  })
+})
+
+describe('args and options', () => {
+  test('positional args in order', async () => {
+    const { output } = await serve(createApp(), ['echo', 'hello'])
+    expect(output).toMatchInlineSnapshot(`
+      "result[1]: hello
+      "
+    `)
+  })
+
+  test('--flag value form', async () => {
+    const { output } = await serve(createApp(), ['echo', 'hello', '--upper', '--prefix', '>>'])
+    expect(output).toMatchInlineSnapshot(`
+      "result[1]: >> HELLO
+      "
+    `)
+  })
+
+  test('multiple options combined', async () => {
+    const { output } = await serve(createApp(), ['echo', 'hi', '--upper', '--prefix', '!'])
+    expect(output).toMatchInlineSnapshot(`
+      "result[1]: ! HI
+      "
+    `)
+  })
+
+  test('--no-flag negation for booleans', async () => {
+    const { output } = await serve(createApp(), [
+      'project',
+      'list',
+      '--no-archived',
+      '--format',
+      'json',
+    ])
+    const parsed = json(output)
+    expect(parsed.items.every((i: any) => !i.archived)).toBe(true)
+  })
+
+  test('array option collects multiple values', async () => {
+    const { output } = await serve(createApp(), [
+      'auth',
+      'login',
+      '--scopes',
+      'read',
+      '--scopes',
+      'write',
+      '--verbose',
+      '--format',
+      'json',
+    ])
+    const parsed = json(output)
+    expect(parsed.data.scopes).toMatchInlineSnapshot(`
+      [
+        "read",
+        "write",
+      ]
+    `)
+  })
+
+  test('number coercion from argv strings', async () => {
+    const { output } = await serve(createApp(), [
+      'project',
+      'list',
+      '--limit',
+      '5',
+      '--verbose',
+      '--format',
+      'json',
+    ])
+    const parsed = json(output)
+    expect(parsed.data.total).toBe(1)
+  })
+
+  test('enum validation fails for invalid value', async () => {
+    const { output, exitCode } = await serve(createApp(), ['project', 'list', '--sort', 'invalid'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: UNKNOWN
+      message: "Invalid option: expected one of \\"name\\"|\\"created\\"|\\"updated\\"\\n\\nDetails: [\\n  {\\n    \\"code\\": \\"invalid_value\\",\\n    \\"values\\": [\\n      \\"name\\",\\n      \\"created\\",\\n      \\"updated\\"\\n    ],\\n    \\"path\\": [\\n      \\"sort\\"\\n    ],\\n    \\"message\\": \\"Invalid option: expected one of \\\\\\"name\\\\\\"|\\\\\\"created\\\\\\"|\\\\\\"updated\\\\\\"\\"\\n  }\\n]"
+      fieldErrors[1]{path,expected,received,message}:
+        sort,"","","Invalid option: expected one of \\"name\\"|\\"created\\"|\\"updated\\""
+      "
+    `)
+  })
+
+  test('missing required arg fails validation', async () => {
+    const { output, exitCode } = await serve(createApp(), ['project', 'get'])
+    expect(exitCode).toBe(1)
+    expect(output).toContain('fieldErrors')
+  })
+
+  test('unknown flag returns error', async () => {
+    const { output, exitCode } = await serve(createApp(), ['ping', '--unknown-flag'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: UNKNOWN
+      message: "Unknown flag: --unknown-flag"
+      "
+    `)
+  })
+})
+
+describe('output formats', () => {
+  test('default TOON format', async () => {
+    const { output } = await serve(createApp(), ['ping'])
+    expect(output).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
+    expect(() => json(output)).toThrow()
+  })
+
+  test('--format json', async () => {
+    const { output } = await serve(createApp(), ['ping', '--format', 'json'])
+    expect(output).toMatchInlineSnapshot(`
+      "{
+        "pong": true
+      }
+      "
+    `)
+  })
+
+  test('--json shorthand', async () => {
+    const { output } = await serve(createApp(), ['ping', '--json'])
+    expect(output).toMatchInlineSnapshot(`
+      "{
+        "pong": true
+      }
+      "
+    `)
+  })
+
+  test('--format yaml', async () => {
+    const { output } = await serve(createApp(), ['ping', '--format', 'yaml'])
+    expect(output).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
+  })
+
+  test('--verbose full envelope', async () => {
+    const { output } = await serve(createApp(), ['ping', '--verbose'])
+    expect(output).toMatchInlineSnapshot(`
+      "ok: true
+      data:
+        pong: true
+      meta:
+        command: ping
+        duration: <stripped>
+      "
+    `)
+  })
+
+  test('--verbose --format json full envelope', async () => {
+    const { output } = await serve(createApp(), ['ping', '--verbose', '--format', 'json'])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "data": {
+          "pong": true,
+        },
+        "meta": {
+          "command": "ping",
+          "duration": "0ms",
+        },
+        "ok": true,
+      }
+    `)
+  })
+
+  test('nested command path in verbose meta', async () => {
+    const { output } = await serve(createApp(), [
+      'project',
+      'deploy',
+      'status',
+      'd-1',
+      '--verbose',
+      '--format',
+      'json',
+    ])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "data": {
+          "deployId": "d-1",
+          "progress": 75,
+          "status": "running",
+        },
+        "meta": {
+          "command": "project deploy status",
+          "duration": "0ms",
+        },
+        "ok": true,
+      }
+    `)
+  })
+})
+
+describe('error handling', () => {
+  test('thrown Error wraps in UNKNOWN code', async () => {
+    const { output, exitCode } = await serve(createApp(), ['explode'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: UNKNOWN
+      message: kaboom
+      "
+    `)
+  })
+
+  test('ClacError preserves code and retryable', async () => {
+    const { output, exitCode } = await serve(createApp(), ['explode-clac', '--format', 'json'])
+    expect(exitCode).toBe(1)
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "code": "QUOTA_EXCEEDED",
+        "message": "Rate limit exceeded",
+        "retryable": true,
+      }
+    `)
+  })
+
+  test('error() sentinel returns error envelope', async () => {
+    const { output, exitCode } = await serve(createApp(), [
+      'auth',
+      'status',
+      '--verbose',
+      '--format',
+      'json',
+    ])
+    expect(exitCode).toBe(1)
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "error": {
+          "code": "NOT_AUTHENTICATED",
+          "message": "Not logged in",
+          "retryable": false,
+        },
+        "meta": {
+          "command": "auth status",
+          "cta": {
+            "commands": [
+              {
+                "command": "app auth login",
+              },
+            ],
+            "description": "Suggested commands:",
+          },
+          "duration": "0ms",
+        },
+        "ok": false,
+      }
+    `)
+  })
+
+  test('ClacError in nested command', async () => {
+    const { output, exitCode } = await serve(createApp(), [
+      'project',
+      'delete',
+      'p1',
+      '--format',
+      'json',
+    ])
+    expect(exitCode).toBe(1)
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "code": "CONFIRMATION_REQUIRED",
+        "message": "Use --force to delete project p1",
+        "retryable": true,
+      }
+    `)
+  })
+
+  test('validation error includes field errors', async () => {
+    const { output, exitCode } = await serve(createApp(), ['validate-fail', '--format', 'json'])
+    expect(exitCode).toBe(1)
+    const parsed = json(output)
+    expect(parsed.fieldErrors.length).toBeGreaterThan(0)
+    expect(parsed.fieldErrors[0].path).toBe('email')
+  })
+
+  test('command not found returns error envelope', async () => {
+    const { output, exitCode } = await serve(createApp(), [
+      'nonexistent',
+      '--verbose',
+      '--format',
+      'json',
+    ])
+    expect(exitCode).toBe(1)
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "error": {
+          "code": "COMMAND_NOT_FOUND",
+          "message": "'nonexistent' is not a command. See 'app --help' for a list of available commands.",
+        },
+        "meta": {
+          "command": "nonexistent",
+          "duration": "0ms",
+        },
+        "ok": false,
+      }
+    `)
+  })
+
+  test('command not found tty format', async () => {
+    const { output, exitCode } = await serve(createApp(), ['nonexistent'], { tty: true })
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "Error: 'nonexistent' is not a command. See 'app --help' for a list of available commands.
+      "
+    `)
+  })
+
+  test('error envelope respects --format json', async () => {
+    const { output, exitCode } = await serve(createApp(), ['explode', '--format', 'json'])
+    expect(exitCode).toBe(1)
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "code": "UNKNOWN",
+        "message": "kaboom",
+      }
+    `)
+  })
+})
+
+describe('cta', () => {
+  test('ok() with string CTAs', async () => {
+    const { output } = await serve(createApp(), ['auth', 'login', '--verbose', '--format', 'json'])
+    expect(json(output).meta.cta).toMatchInlineSnapshot(`
+      {
+        "commands": [
+          {
+            "command": "app auth status",
+          },
+        ],
+        "description": "Verify your session:",
+      }
+    `)
+  })
+
+  test('ok() with object CTAs including descriptions', async () => {
+    const { output } = await serve(createApp(), [
+      'project',
+      'create',
+      'MyProject',
+      '--verbose',
+      '--format',
+      'json',
+    ])
+    expect(json(output).meta.cta).toMatchInlineSnapshot(`
+      {
+        "commands": [
+          {
+            "command": "app project get p-new",
+            "description": "View "MyProject"",
+          },
+          {
+            "command": "app project list",
+          },
+        ],
+        "description": "Suggested commands:",
+      }
+    `)
+  })
+
+  test('error() with CTA', async () => {
+    const { output } = await serve(createApp(), ['auth', 'status', '--verbose', '--format', 'json'])
+    expect(json(output).meta.cta).toMatchInlineSnapshot(`
+      {
+        "commands": [
+          {
+            "command": "app auth login",
+          },
+        ],
+        "description": "Suggested commands:",
+      }
+    `)
+  })
+
+  test('plain return omits CTA', async () => {
+    const { output } = await serve(createApp(), ['ping', '--verbose', '--format', 'json'])
+    expect(json(output).meta.cta).toBeUndefined()
+  })
+
+  test('dynamic CTA list from data', async () => {
+    const { output } = await serve(createApp(), [
+      'project',
+      'list',
+      '--archived',
+      '--verbose',
+      '--format',
+      'json',
+    ])
+    expect(json(output).meta.cta).toMatchInlineSnapshot(`
+      {
+        "commands": [
+          {
+            "command": "app project get p1",
+            "description": "View "Alpha"",
+          },
+          {
+            "command": "app project get p2",
+            "description": "View "Beta"",
+          },
+        ],
+        "description": "Suggested commands:",
+      }
+    `)
+  })
+})
+
+describe('async', () => {
+  test('async handler resolves', async () => {
+    const { output } = await serve(createApp(), ['slow'])
+    expect(output).toMatchInlineSnapshot(`
+      "done: true
+      "
+    `)
+  })
+})
+
+describe('help', () => {
+  test('root help (no args)', async () => {
+    const { output, exitCode } = await serve(createApp(), [])
+    expect(exitCode).toBeUndefined()
+    expect(output).toMatchInlineSnapshot(`
+      "app — A comprehensive CLI application for testing.
+
+      Usage: app <command>
+
+      Commands:
+        auth           Authentication commands
+        config         Show current configuration
+        echo           Echo back arguments
+        explode        Always fails
+        explode-clac   Fails with ClacError
+        ping           Health check
+        project        Manage projects
+        slow           Async command
+        validate-fail  Fails validation
+      "
+    `)
+  })
+
+  test('--help on root', async () => {
+    const { output } = await serve(createApp(), ['--help'])
+    expect(output).toContain('Usage: app <command>')
+  })
+
+  test('group help (no subcommand)', async () => {
+    const { output, exitCode } = await serve(createApp(), ['auth'])
+    expect(exitCode).toBeUndefined()
+    expect(output).toMatchInlineSnapshot(`
+      "app auth — Authentication commands
+
+      Usage: app auth <command>
+
+      Commands:
+        login   Log in to the service
+        logout  Log out of the service
+        status  Show authentication status
+      "
+    `)
+  })
+
+  test('nested group help', async () => {
+    const { output, exitCode } = await serve(createApp(), ['project', 'deploy'])
+    expect(exitCode).toBeUndefined()
+    expect(output).toMatchInlineSnapshot(`
+      "app project deploy — Deployment commands
+
+      Usage: app project deploy <command>
+
+      Commands:
+        create    Create a deployment
+        rollback  Rollback a deployment
+        status    Check deployment status
+      "
+    `)
+  })
+
+  test('--help on leaf command', async () => {
+    const { output } = await serve(createApp(), ['project', 'list', '--help'])
+    expect(output).toMatchInlineSnapshot(`
+      "app project list — List projects
+
+      Usage: app project list
+
+      Options:
+        --limit <number>      Max results (default: 20)
+        --sort <value>        Sort field (default: name)
+        --archived <boolean>  Include archived (default: false)
+      "
+    `)
+  })
+
+  test('--help on group shows group help', async () => {
+    const { output } = await serve(createApp(), ['project', '--help'])
+    expect(output).toContain('app project')
+    expect(output).toContain('deploy')
+    expect(output).toContain('list')
+  })
+
+  test('--version', async () => {
+    const { output } = await serve(createApp(), ['--version'])
+    expect(output).toMatchInlineSnapshot(`
+      "3.5.0
+      "
+    `)
+  })
+
+  test('--help takes precedence over --version', async () => {
+    const { output } = await serve(createApp(), ['--help', '--version'])
+    expect(output).toContain('Usage: app <command>')
+    expect(output).not.toContain('3.5.0')
+  })
+})
+
+describe('tty', () => {
+  test('suppresses structured output in tty mode', async () => {
+    const { output } = await serve(createApp(), ['ping'], { tty: true })
+    expect(output).toBe('')
+  })
+
+  test('tty error shows human-readable message', async () => {
+    const { output, exitCode } = await serve(createApp(), ['explode'], { tty: true })
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "Error: kaboom
+      "
+    `)
+  })
+
+  test('tty ClacError shows code', async () => {
+    const { output, exitCode } = await serve(createApp(), ['explode-clac'], { tty: true })
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "Error (QUOTA_EXCEEDED): Rate limit exceeded
+      "
+    `)
+  })
+
+  test('tty error() sentinel shows human-readable', async () => {
+    const { output, exitCode } = await serve(createApp(), ['auth', 'status'], { tty: true })
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "Error (NOT_AUTHENTICATED): Not logged in
+      "
+    `)
+  })
+
+  test('tty + --verbose overrides to structured', async () => {
+    const { output } = await serve(createApp(), ['ping', '--verbose'], { tty: true })
+    expect(output).toMatchInlineSnapshot(`
+      "ok: true
+      data:
+        pong: true
+      meta:
+        command: ping
+        duration: <stripped>
+      "
+    `)
+  })
+
+  test('tty + --json overrides to structured', async () => {
+    const { output } = await serve(createApp(), ['ping', '--json'], { tty: true })
+    expect(output).toMatchInlineSnapshot(`
+      "{
+        "pong": true
+      }
+      "
+    `)
+  })
+
+  test('tty + --format toon overrides to structured', async () => {
+    const { output } = await serve(createApp(), ['ping', '--format', 'toon'], { tty: true })
+    expect(output).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
+  })
+
+  test('tty help still displays', async () => {
+    const { output } = await serve(createApp(), [], { tty: true })
+    expect(output).toContain('Usage: app <command>')
+  })
+
+  test('tty --version still displays', async () => {
+    const { output } = await serve(createApp(), ['--version'], { tty: true })
+    expect(output).toMatchInlineSnapshot(`
+      "3.5.0
+      "
+    `)
+  })
+
+  test('tty unknown command shows human error', async () => {
+    const { output, exitCode } = await serve(createApp(), ['nope'], { tty: true })
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "Error: 'nope' is not a command. See 'app --help' for a list of available commands.
+      "
+    `)
+  })
+
+  test('tty validation error shows field details', async () => {
+    const { output, exitCode } = await serve(createApp(), ['project', 'get'], { tty: true })
+    expect(exitCode).toBe(1)
+    expect(output).toContain('Error')
+    expect(output).toContain('id')
+  })
+})
+
+describe('--llms', () => {
+  test('json manifest lists all leaf commands sorted', async () => {
+    const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
+    const manifest = json(output)
+    expect(manifest.version).toBe('clac.v1')
+    const names = manifest.commands.map((c: any) => c.name)
+    expect(names).toMatchInlineSnapshot(`
+      [
+        "auth login",
+        "auth logout",
+        "auth status",
+        "config",
+        "echo",
+        "explode",
+        "explode-clac",
+        "ping",
+        "project create",
+        "project delete",
+        "project deploy create",
+        "project deploy rollback",
+        "project deploy status",
+        "project get",
+        "project list",
+        "slow",
+        "validate-fail",
+      ]
+    `)
+  })
+
+  test('manifest includes schema.args and schema.options separately', async () => {
+    const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
+    const projectList = json(output).commands.find((c: any) => c.name === 'project list')
+    expect(projectList.schema.options.properties).toMatchInlineSnapshot(`
+      {
+        "archived": {
+          "default": false,
+          "description": "Include archived",
+          "type": "boolean",
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max results",
+          "type": "number",
+        },
+        "sort": {
+          "default": "name",
+          "description": "Sort field",
+          "enum": [
+            "name",
+            "created",
+            "updated",
+          ],
+          "type": "string",
+        },
+      }
+    `)
+    expect(projectList.schema.args).toBeUndefined()
+  })
+
+  test('manifest includes schema.output', async () => {
+    const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
+    const projectGet = json(output).commands.find((c: any) => c.name === 'project get')
+    expect(projectGet.schema.output).toMatchInlineSnapshot(`
+      {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string",
+          },
+          "id": {
+            "type": "string",
+          },
+          "members": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "role": {
+                  "type": "string",
+                },
+                "userId": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "userId",
+                "role",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "name": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "members",
+        ],
+        "type": "object",
+      }
+    `)
+  })
+
+  test('manifest includes annotations', async () => {
+    const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
+    const manifest = json(output)
+
+    const authLogout = manifest.commands.find((c: any) => c.name === 'auth logout')
+    expect(authLogout.annotations).toMatchInlineSnapshot(`
+      {
+        "destructiveHint": true,
+      }
+    `)
+
+    const authLogin = manifest.commands.find((c: any) => c.name === 'auth login')
+    expect(authLogin.annotations).toMatchInlineSnapshot(`
+      {
+        "idempotentHint": true,
+        "openWorldHint": true,
+      }
+    `)
+
+    const projectList = manifest.commands.find((c: any) => c.name === 'project list')
+    expect(projectList.annotations).toMatchInlineSnapshot(`
+      {
+        "openWorldHint": true,
+        "readOnlyHint": true,
+      }
+    `)
+
+    const ping = manifest.commands.find((c: any) => c.name === 'ping')
+    expect(ping.annotations).toBeUndefined()
+  })
+
+  test('manifest omits schema when no schemas defined', async () => {
+    const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
+    const ping = json(output).commands.find((c: any) => c.name === 'ping')
+    expect(ping.schema).toBeUndefined()
+  })
+
+  test('scoped --llms to group', async () => {
+    const { output } = await serve(createApp(), ['auth', '--llms', '--format', 'json'])
+    const names = json(output).commands.map((c: any) => c.name)
+    expect(names).toMatchInlineSnapshot(`
+      [
+        "auth login",
+        "auth logout",
+        "auth status",
+      ]
+    `)
+  })
+
+  test('scoped --llms to nested group', async () => {
+    const { output } = await serve(createApp(), ['project', 'deploy', '--llms', '--format', 'json'])
+    const names = json(output).commands.map((c: any) => c.name)
+    expect(names).toMatchInlineSnapshot(`
+      [
+        "project deploy create",
+        "project deploy rollback",
+        "project deploy status",
+      ]
+    `)
+  })
+
+  test('default --llms outputs markdown', async () => {
+    const { output } = await serve(createApp(), ['--llms'])
+    expect(output).toContain('# app')
+    expect(output).toContain('auth login')
+    expect(output).toContain('project list')
+  })
+
+  test('--llms markdown includes argument tables', async () => {
+    const { output } = await serve(createApp(), ['project', '--llms'])
+    expect(output).toContain('Arguments')
+    expect(output).toContain('`id`')
+  })
+
+  test('--llms markdown includes options tables', async () => {
+    const { output } = await serve(createApp(), ['project', '--llms'])
+    expect(output).toContain('Options')
+    expect(output).toContain('`--limit`')
+  })
+
+  test('--llms markdown includes output tables', async () => {
+    const { output } = await serve(createApp(), ['project', '--llms'])
+    expect(output).toContain('Output')
+  })
+
+  test('--llms --format yaml', async () => {
+    const { output } = await serve(createApp(), ['--llms', '--format', 'yaml'])
+    expect(output).toContain('version: clac.v1')
+  })
+})
+
+describe('typegen', () => {
+  test('generates correct .d.ts for entire CLI', () => {
+    expect(Typegen.fromCli(createApp())).toMatchInlineSnapshot(`
+      "declare module 'clac' {
+        interface Register {
+          commands: {
+            'auth login': { args: {}; options: { hostname: string; web: boolean; scopes: string[] } }
+            'auth logout': { args: {}; options: {} }
+            'auth status': { args: {}; options: {} }
+            'config': { args: { key: string }; options: {} }
+            'echo': { args: { message: string; repeat: number }; options: { upper: boolean; prefix: string } }
+            'explode': { args: {}; options: {} }
+            'explode-clac': { args: {}; options: {} }
+            'ping': { args: {}; options: {} }
+            'project create': { args: { name: string }; options: { description: string; private: boolean } }
+            'project delete': { args: { id: string }; options: { force: boolean } }
+            'project deploy create': { args: { env: string }; options: { branch: string; dryRun: boolean } }
+            'project deploy rollback': { args: { deployId: string }; options: {} }
+            'project deploy status': { args: { deployId: string }; options: {} }
+            'project get': { args: { id: string }; options: {} }
+            'project list': { args: {}; options: { limit: number; sort: "name" | "created" | "updated"; archived: boolean } }
+            'slow': { args: {}; options: {} }
+            'validate-fail': { args: { email: string; age: number }; options: {} }
+          }
+        }
+      }
+      "
+    `)
+  })
+})
+
+describe('composition', () => {
+  test('multiple groups on same parent', async () => {
+    const cli = createApp()
+    const { output: o1 } = await serve(cli, ['auth', 'logout'])
+    expect(o1).toMatchInlineSnapshot(`
+      "loggedOut: true
+      "
+    `)
+    const { output: o2 } = await serve(cli, ['project', 'list', '--format', 'json'])
+    expect(json(o2).items).toBeDefined()
+    const { output: o3 } = await serve(cli, ['ping'])
+    expect(o3).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
+  })
+
+  test('deeply nested deploy commands work alongside siblings', async () => {
+    const cli = createApp()
+    const { output: o1 } = await serve(cli, ['project', 'deploy', 'create', 'staging'])
+    expect(o1).toMatchInlineSnapshot(`
+      "deployId: d-123
+      url: "https://staging.example.com"
+      status: pending
+      "
+    `)
+    const { output: o2 } = await serve(cli, ['project', 'list', '--format', 'json'])
+    expect(json(o2).items).toBeDefined()
+  })
+
+  test('leaf CLI mounted alongside groups', async () => {
+    const cli = createApp()
+    const { output: o1 } = await serve(cli, ['config'])
+    expect(o1).toMatchInlineSnapshot(`
+      "apiUrl: "https://api.example.com"
+      timeout: 30
+      debug: false
+      "
+    `)
+    const { output: o2 } = await serve(cli, ['auth', 'logout'])
+    expect(o2).toMatchInlineSnapshot(`
+      "loggedOut: true
+      "
+    `)
+  })
+
+  test('create with single options object', async () => {
+    const cli = Cli.create({
+      name: 'one-shot',
+      description: 'Single object form',
+      run: () => ({ result: 42 }),
+    })
+    expect(cli.name).toBe('one-shot')
+    const { output } = await serve(cli, [])
+    expect(output).toMatchInlineSnapshot(`
+      "result: 42
+      "
+    `)
+  })
+})
+
+describe('edge cases', () => {
+  test('command with only options (no args)', async () => {
+    const { output } = await serve(createApp(), [
+      'project',
+      'list',
+      '--limit',
+      '1',
+      '--format',
+      'json',
+    ])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "items": [
+          {
+            "archived": false,
+            "id": "p1",
+            "name": "Alpha",
+          },
+        ],
+        "total": 1,
+      }
+    `)
+  })
+
+  test('command with only args (no options)', async () => {
+    const { output } = await serve(createApp(), ['project', 'get', 'p1', '--format', 'json'])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "description": "Main project",
+        "id": "p1",
+        "members": [
+          {
+            "role": "admin",
+            "userId": "u1",
+          },
+        ],
+        "name": "Alpha",
+      }
+    `)
+  })
+
+  test('command with no schemas at all', async () => {
+    const { output } = await serve(createApp(), ['ping', '--format', 'json'])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "pong": true,
+      }
+    `)
+  })
+
+  test('optional arg can be omitted', async () => {
+    const { output } = await serve(createApp(), ['config', '--format', 'json'])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "apiUrl": "https://api.example.com",
+        "debug": false,
+        "timeout": 30,
+      }
+    `)
+  })
+
+  test('--force passes through to handler', async () => {
+    const { output } = await serve(createApp(), [
+      'project',
+      'delete',
+      'p1',
+      '--force',
+      '--format',
+      'json',
+    ])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "deleted": true,
+        "id": "p1",
+      }
+    `)
+  })
+
+  test('flag order does not matter', async () => {
+    const { output } = await serve(createApp(), [
+      '--format',
+      'json',
+      'project',
+      'deploy',
+      'create',
+      'prod',
+      '--branch',
+      'release',
+      '--verbose',
+    ])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "data": {
+          "deployId": "d-123",
+          "status": "pending",
+          "url": "https://prod.example.com",
+        },
+        "meta": {
+          "command": "project deploy create",
+          "duration": "0ms",
+        },
+        "ok": true,
+      }
+    `)
+  })
+
+  test('empty argv on router shows help', async () => {
+    const { output, exitCode } = await serve(createApp(), [])
+    expect(exitCode).toBeUndefined()
+    expect(output).toContain('Usage: app <command>')
+  })
+})
+
+async function serve(
+  cli: { serve: Cli.Cli['serve'] },
+  argv: string[],
+  options: Cli.serve.Options = {},
+) {
+  let output = ''
+  let exitCode: number | undefined
+  await cli.serve(argv, {
+    stdout(s) {
+      output += s
+    },
+    exit(code) {
+      exitCode = code
+    },
+    ...options,
+  })
+  return {
+    output: output.replace(/duration: \d+ms/g, 'duration: <stripped>'),
+    exitCode,
+  }
+}
+
+function json(raw: string) {
+  return JSON.parse(raw)
+}
+
+function createApp() {
+  const auth = Cli.create('auth', { description: 'Authentication commands' })
+    .command('login', {
+      description: 'Log in to the service',
+      options: z.object({
+        hostname: z.string().default('api.example.com').describe('API hostname'),
+        web: z.boolean().default(false).describe('Open browser'),
+        scopes: z.array(z.string()).default([]).describe('OAuth scopes'),
+      }),
+      alias: { hostname: 'h', web: 'w' },
+      idempotent: true,
+      openWorld: true,
+      run({ options, ok }) {
+        return ok(
+          { hostname: options.hostname, scopes: options.scopes },
+          {
+            cta: {
+              description: 'Verify your session:',
+              commands: ['auth status'],
+            },
+          },
+        )
+      },
+    })
+    .command('logout', {
+      description: 'Log out of the service',
+      destructive: true,
+      run({ ok }) {
+        return ok({ loggedOut: true })
+      },
+    })
+    .command('status', {
+      description: 'Show authentication status',
+      readOnly: true,
+      output: z.object({ loggedIn: z.boolean(), hostname: z.string(), user: z.string() }),
+      run({ error }) {
+        return error({
+          code: 'NOT_AUTHENTICATED',
+          message: 'Not logged in',
+          retryable: false,
+          cta: { commands: ['auth login'] },
+        })
+      },
+    })
+
+  const project = Cli.create('project', { description: 'Manage projects' })
+    .command('list', {
+      description: 'List projects',
+      options: z.object({
+        limit: z.number().default(20).describe('Max results'),
+        sort: z.enum(['name', 'created', 'updated']).default('name').describe('Sort field'),
+        archived: z.boolean().default(false).describe('Include archived'),
+      }),
+      alias: { limit: 'l', sort: 's' },
+      readOnly: true,
+      openWorld: true,
+      output: z.object({
+        items: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            archived: z.boolean(),
+          }),
+        ),
+        total: z.number(),
+      }),
+      run({ options, ok }) {
+        const items = [
+          { id: 'p1', name: 'Alpha', archived: false },
+          { id: 'p2', name: 'Beta', archived: true },
+        ].filter((p) => options.archived || !p.archived)
+        return ok(
+          { items, total: items.length },
+          {
+            cta: {
+              commands: items.map((p) => ({
+                command: `project get ${p.id}`,
+                description: `View "${p.name}"`,
+              })),
+            },
+          },
+        )
+      },
+    })
+    .command('get', {
+      description: 'Get a project by ID',
+      args: z.object({ id: z.string().describe('Project ID') }),
+      readOnly: true,
+      openWorld: true,
+      output: z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string(),
+        members: z.array(z.object({ userId: z.string(), role: z.string() })),
+      }),
+      run({ args, ok }) {
+        return ok({
+          id: args.id,
+          name: 'Alpha',
+          description: 'Main project',
+          members: [{ userId: 'u1', role: 'admin' }],
+        })
+      },
+    })
+    .command('create', {
+      description: 'Create a new project',
+      args: z.object({ name: z.string().describe('Project name') }),
+      options: z.object({
+        description: z.string().default('').describe('Project description'),
+        private: z.boolean().default(false).describe('Private project'),
+      }),
+      alias: { description: 'd' },
+      openWorld: true,
+      output: z.object({ id: z.string(), url: z.string() }),
+      run({ args, ok }) {
+        return ok(
+          { id: 'p-new', url: 'https://example.com/projects/p-new' },
+          {
+            cta: {
+              commands: [
+                { command: 'project get p-new', description: `View "${args.name}"` },
+                'project list',
+              ],
+            },
+          },
+        )
+      },
+    })
+    .command('delete', {
+      description: 'Delete a project',
+      args: z.object({ id: z.string().describe('Project ID') }),
+      options: z.object({
+        force: z.boolean().default(false).describe('Skip confirmation'),
+      }),
+      alias: { force: 'f' },
+      destructive: true,
+      openWorld: true,
+      run({ args, options }) {
+        if (!options.force)
+          throw new Errors.ClacError({
+            code: 'CONFIRMATION_REQUIRED',
+            message: `Use --force to delete project ${args.id}`,
+            retryable: true,
+          })
+        return { deleted: true, id: args.id }
+      },
+    })
+
+  const deploy = Cli.create('deploy', { description: 'Deployment commands' })
+    .command('create', {
+      description: 'Create a deployment',
+      args: z.object({ env: z.string().describe('Target environment') }),
+      options: z.object({
+        branch: z.string().default('main').describe('Branch to deploy'),
+        dryRun: z.boolean().default(false).describe('Dry run mode'),
+      }),
+      alias: { branch: 'b' },
+      openWorld: true,
+      output: z.object({ deployId: z.string(), url: z.string(), status: z.string() }),
+      run({ args, options, ok }) {
+        return ok({
+          deployId: 'd-123',
+          url: `https://${args.env}.example.com`,
+          status: options.dryRun ? 'dry-run' : 'pending',
+        })
+      },
+    })
+    .command('status', {
+      description: 'Check deployment status',
+      args: z.object({ deployId: z.string().describe('Deployment ID') }),
+      readOnly: true,
+      openWorld: true,
+      output: z.object({ deployId: z.string(), status: z.string(), progress: z.number() }),
+      run({ args }) {
+        return { deployId: args.deployId, status: 'running', progress: 75 }
+      },
+    })
+    .command('rollback', {
+      description: 'Rollback a deployment',
+      args: z.object({ deployId: z.string().describe('Deployment ID') }),
+      destructive: true,
+      openWorld: true,
+      run({ args }) {
+        return { rolledBack: true, deployId: args.deployId }
+      },
+    })
+
+  project.command(deploy)
+
+  const config = Cli.create('config', {
+    description: 'Show current configuration',
+    args: z.object({ key: z.string().optional().describe('Config key to show') }),
+    readOnly: true,
+    run({ args }) {
+      if (args.key) return { key: args.key, value: 'some-value' }
+      return { apiUrl: 'https://api.example.com', timeout: 30, debug: false }
+    },
+  })
+
+  const cli = Cli.create('app', {
+    version: '3.5.0',
+    description: 'A comprehensive CLI application for testing.',
+  })
+
+  cli.command('ping', {
+    description: 'Health check',
+    run() {
+      return { pong: true }
+    },
+  })
+
+  cli.command('echo', {
+    description: 'Echo back arguments',
+    args: z.object({
+      message: z.string().describe('Message to echo'),
+      repeat: z.number().optional().describe('Times to repeat'),
+    }),
+    options: z.object({
+      upper: z.boolean().default(false).describe('Uppercase output'),
+      prefix: z.string().default('').describe('Prefix string'),
+    }),
+    alias: { upper: 'u', prefix: 'p' },
+    idempotent: true,
+    readOnly: true,
+    run({ args, options }) {
+      const count = args.repeat ?? 1
+      let msg = options.prefix ? `${options.prefix} ${args.message}` : args.message
+      if (options.upper) msg = msg.toUpperCase()
+      return { result: Array(count).fill(msg) }
+    },
+  })
+
+  cli.command('slow', {
+    description: 'Async command',
+    async run() {
+      await new Promise((r) => setTimeout(r, 5))
+      return { done: true }
+    },
+  })
+
+  cli.command('explode', {
+    description: 'Always fails',
+    run() {
+      throw new Error('kaboom')
+    },
+  })
+
+  cli.command('explode-clac', {
+    description: 'Fails with ClacError',
+    run() {
+      throw new Errors.ClacError({
+        code: 'QUOTA_EXCEEDED',
+        message: 'Rate limit exceeded',
+        retryable: true,
+        hint: 'Wait 60 seconds',
+      })
+    },
+  })
+
+  cli.command('validate-fail', {
+    description: 'Fails validation',
+    args: z.object({
+      email: z.string().email().describe('Email address'),
+      age: z.number().min(0).max(150).describe('Age'),
+    }),
+    run({ args }) {
+      return args
+    },
+  })
+
+  cli.command(auth)
+  cli.command(project)
+  cli.command(config)
+
+  return cli
+}

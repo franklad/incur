@@ -30,9 +30,17 @@ const pr = Cli.create('pr', { description: 'Manage pull requests' })
     openWorld: true,
     run({ ok }) {
       const items: { number: number; title: string; state: string; author: string }[] = []
-      return ok({ items, totalCount: 0 }, {
-        cta: { commands: items.map((item) => ({ command: `pr view ${item.number}`, description: `View "${item.title}"` })) },
-      })
+      return ok(
+        { items, totalCount: 0 },
+        {
+          cta: {
+            commands: items.map((item) => ({
+              command: `pr view ${item.number}`,
+              description: `View "${item.title}"`,
+            })),
+          },
+        },
+      )
     },
   })
   .command('view', {
@@ -57,9 +65,14 @@ const pr = Cli.create('pr', { description: 'Manage pull requests' })
         state: 'open',
         mergeable: true,
       }
-      return ok(result, result.mergeable ? {
-        cta: { commands: [{ command: 'pr merge', description: 'Merge this PR' }] },
-      } : undefined)
+      return ok(
+        result,
+        result.mergeable
+          ? {
+              cta: { commands: [{ command: 'pr merge', description: 'Merge this PR' }] },
+            }
+          : undefined,
+      )
     },
   })
   .command('create', {
@@ -74,9 +87,12 @@ const pr = Cli.create('pr', { description: 'Manage pull requests' })
     output: z.object({ number: z.number(), url: z.string() }),
     openWorld: true,
     run({ ok }) {
-      return ok({ number: 1, url: `https://github.com/org/repo/pull/1` }, {
-        cta: { commands: [{ command: 'pr view', description: 'View the new PR' }] },
-      })
+      return ok(
+        { number: 1, url: `https://github.com/org/repo/pull/1` },
+        {
+          cta: { commands: [{ command: 'pr view', description: 'View the new PR' }] },
+        },
+      )
     },
   })
   .command('merge', {
@@ -111,9 +127,17 @@ const issue = Cli.create('issue', { description: 'Manage issues' })
     openWorld: true,
     run({ ok }) {
       const items: { number: number; title: string; state: string }[] = []
-      return ok({ items }, {
-        cta: { commands: items.map((item) => ({ command: `issue view ${item.number}`, description: `View "${item.title}"` })) },
-      })
+      return ok(
+        { items },
+        {
+          cta: {
+            commands: items.map((item) => ({
+              command: `issue view ${item.number}`,
+              description: `View "${item.title}"`,
+            })),
+          },
+        },
+      )
     },
   })
   .command('create', {
@@ -127,9 +151,12 @@ const issue = Cli.create('issue', { description: 'Manage issues' })
     output: z.object({ number: z.number(), url: z.string() }),
     openWorld: true,
     run({ ok }) {
-      return ok({ number: 1, url: `https://github.com/org/repo/issues/1` }, {
-        cta: { commands: [{ command: 'issue view 1', description: 'View the new issue' }] },
-      })
+      return ok(
+        { number: 1, url: `https://github.com/org/repo/issues/1` },
+        {
+          cta: { commands: [{ command: 'issue view 1', description: 'View the new issue' }] },
+        },
+      )
     },
   })
   .command('view', {

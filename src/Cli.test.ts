@@ -1,6 +1,10 @@
 import { Cli, Errors, z } from 'clac'
 
-async function serve(cli: { serve: Cli.Cli['serve'] }, argv: string[], options: Cli.serve.Options = {}) {
+async function serve(
+  cli: { serve: Cli.Cli['serve'] },
+  argv: string[],
+  options: Cli.serve.Options = {},
+) {
   let output = ''
   let exitCode: number | undefined
   await cli.serve(argv, {
@@ -119,7 +123,7 @@ describe('serve', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "code: COMMAND_NOT_FOUND
-      message: "Unknown command: nonexistent"
+      message: 'nonexistent' is not a command. See 'test --help' for a list of available commands.
       "
     `)
   })
@@ -133,7 +137,7 @@ describe('serve', () => {
       "ok: false
       error:
         code: COMMAND_NOT_FOUND
-        message: "Unknown command: nonexistent"
+        message: 'nonexistent' is not a command. See 'test --help' for a list of available commands.
       meta:
         command: nonexistent
         duration: <stripped>
@@ -272,13 +276,16 @@ describe('--llms', () => {
 
     const { output } = await serve(cli, ['--llms', '--format', 'json'])
     const manifest = JSON.parse(output)
-    expect(manifest.commands[0].schema.input).toEqual({
+    expect(manifest.commands[0].schema.args).toEqual({
       type: 'object',
-      properties: {
-        name: { type: 'string' },
-        loud: { type: 'boolean', default: false },
-      },
-      required: ['name', 'loud'],
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+      additionalProperties: false,
+    })
+    expect(manifest.commands[0].schema.options).toEqual({
+      type: 'object',
+      properties: { loud: { type: 'boolean', default: false } },
+      required: ['loud'],
       additionalProperties: false,
     })
   })
@@ -371,13 +378,13 @@ describe('--llms', () => {
     expect(manifest.commands[0].description).toBe('Approve a review')
   })
 
-  test('defaults to TOON format', async () => {
+  test('defaults to markdown format', async () => {
     const cli = Cli.create('test')
     cli.command('ping', { description: 'Health check', run: () => ({ pong: true }) })
 
     const { output } = await serve(cli, ['--llms'])
-    expect(output).toContain('version: clac.v1')
-    expect(output).toContain('ping')
+    expect(output).toContain('# test ping')
+    expect(output).toContain('Health check')
   })
 
   test('respects --format yaml', async () => {
@@ -411,14 +418,9 @@ describe('--llms', () => {
             "description": "Greet someone",
             "name": "greet",
             "schema": {
-              "input": {
+              "args": {
                 "additionalProperties": false,
                 "properties": {
-                  "loud": {
-                    "default": false,
-                    "description": "Shout it",
-                    "type": "boolean",
-                  },
                   "name": {
                     "description": "Name to greet",
                     "type": "string",
@@ -426,6 +428,19 @@ describe('--llms', () => {
                 },
                 "required": [
                   "name",
+                ],
+                "type": "object",
+              },
+              "options": {
+                "additionalProperties": false,
+                "properties": {
+                  "loud": {
+                    "default": false,
+                    "description": "Shout it",
+                    "type": "boolean",
+                  },
+                },
+                "required": [
                   "loud",
                 ],
                 "type": "object",
@@ -448,6 +463,23 @@ describe('--llms', () => {
         "version": "clac.v1",
       }
     `)
+  })
+
+  test('--llms --format md outputs skill files', async () => {
+    const cli = Cli.create('test')
+    cli.command('greet', {
+      description: 'Greet someone',
+      args: z.object({ name: z.string().describe('Name to greet') }),
+      output: z.object({ message: z.string() }),
+      readOnly: true,
+      run: ({ args }) => ({ message: `hello ${args.name}` }),
+    })
+
+    const { output } = await serve(cli, ['--llms', '--format', 'md'])
+    expect(output).toContain('# test greet')
+    expect(output).toContain('## Arguments')
+    expect(output).toContain('## Output')
+    expect(output).not.toMatch(/^---$/m)
   })
 })
 
@@ -562,7 +594,7 @@ describe('subcommands', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "code: COMMAND_NOT_FOUND
-      message: "Unknown subcommand: unknown. Available: create, list"
+      message: 'unknown' is not a command. See 'test pr --help' for a list of available commands.
       "
     `)
   })
@@ -659,26 +691,41 @@ describe('cta', () => {
     const cli = Cli.create('test')
     cli.command('list', {
       run({ ok }) {
-        return ok({ items: [] }, {
-          cta: { commands: [{ command: 'get 1', description: 'View item 1' }] },
-        })
+        return ok(
+          { items: [] },
+          {
+            cta: { commands: [{ command: 'get 1', description: 'View item 1' }] },
+          },
+        )
       },
     })
 
     const { output } = await serve(cli, ['list', '--verbose', '--format', 'json'])
     const parsed = JSON.parse(output)
-    expect(parsed.meta.cta.commands).toEqual([{ command: 'test get 1', description: 'View item 1' }])
+    expect(parsed.meta.cta.commands).toEqual([
+      { command: 'test get 1', description: 'View item 1' },
+    ])
   })
 
   test('tuple form with args/options', async () => {
     const cli = Cli.create('test')
     cli.command('create', {
       run({ ok }) {
-        return ok({ id: 1 }, {
-          cta: {
-            commands: [{ command: 'get', args: { id: 1 }, options: { limit: 10 }, description: 'View the item' }],
+        return ok(
+          { id: 1 },
+          {
+            cta: {
+              commands: [
+                {
+                  command: 'get',
+                  args: { id: 1 },
+                  options: { limit: 10 },
+                  description: 'View the item',
+                },
+              ],
+            },
           },
-        })
+        )
       },
     })
 
@@ -693,9 +740,12 @@ describe('cta', () => {
     const cli = Cli.create('test')
     cli.command('list', {
       run({ ok }) {
-        return ok({ items: [] }, {
-          cta: { commands: [{ command: 'get', args: { id: true }, options: { format: true } }] },
-        })
+        return ok(
+          { items: [] },
+          {
+            cta: { commands: [{ command: 'get', args: { id: true }, options: { format: true } }] },
+          },
+        )
       },
     })
 
@@ -708,9 +758,12 @@ describe('cta', () => {
     const cli = Cli.create('test')
     cli.command('create', {
       run({ ok }) {
-        return ok({ id: 1 }, {
-          cta: { description: 'View the created item:', commands: ['get 1'] },
-        })
+        return ok(
+          { id: 1 },
+          {
+            cta: { description: 'View the created item:', commands: ['get 1'] },
+          },
+        )
       },
     })
 
@@ -800,9 +853,12 @@ describe('cta', () => {
       args: z.object({ title: z.string() }),
       output: z.object({ id: z.number(), title: z.string() }),
       run({ args, ok }) {
-        return ok({ id: 42, title: args.title }, {
-          cta: { commands: [{ command: 'pr get 42', description: 'View the PR' }] },
-        })
+        return ok(
+          { id: 42, title: args.title },
+          {
+            cta: { commands: [{ command: 'pr get 42', description: 'View the PR' }] },
+          },
+        )
       },
     })
     cli.command(pr)
@@ -1160,7 +1216,7 @@ describe('tty', () => {
     const { output, exitCode } = await serve(cli, ['nonexistent'], { tty: true })
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
-      "Error: Unknown command: nonexistent
+      "Error: 'nonexistent' is not a command. See 'test --help' for a list of available commands.
       "
     `)
   })

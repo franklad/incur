@@ -1,19 +1,11 @@
 import fs from 'node:fs/promises'
-import path from 'node:path'
-import url from 'node:url'
 import { z } from 'zod'
 import * as Cli from './Cli.js'
+import { importCli } from './internal/utils.js'
 
 /** Imports a CLI from `input` (must `export default` a `Cli`), generates the `.d.ts`, and writes it to `output`. */
 export async function generate(input: string, output: string): Promise<void> {
-  const resolved = path.resolve(input)
-  const stat = await fs.stat(resolved)
-  const file = stat.isDirectory() ? await resolveEntry(resolved) : resolved
-  const href = url.pathToFileURL(file).href
-  const mod = await import(href)
-  const cli = mod.default as Cli.Cli
-  if (!cli || !Cli.toCommands.has(cli))
-    throw new Error(`Expected default export to be a \`Cli\` instance: ${input}`)
+  const cli = await importCli(input)
   await fs.writeFile(output, fromCli(cli))
 }
 
@@ -60,15 +52,6 @@ function schemaToType(schema: z.ZodObject<any> | undefined): string {
     ([key, value]) => `${key}: ${resolveType(value, defs)}`,
   )
   return `{ ${entries.join('; ')} }`
-}
-
-/** Resolves the CLI entry file from a directory by reading its `package.json` `main` field, falling back to `cli.ts`. */
-async function resolveEntry(dir: string): Promise<string> {
-  try {
-    const pkg = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8'))
-    if (pkg.main) return path.join(dir, pkg.main)
-  } catch {}
-  return path.join(dir, 'cli.ts')
 }
 
 /** Recursively resolves a JSON Schema node to a TypeScript type string. */
