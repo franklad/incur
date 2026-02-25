@@ -1,4 +1,4 @@
-import { Cli, z } from 'clac'
+import { Cli, Errors, z } from 'clac'
 
 async function serve(cli: ReturnType<typeof Cli.create>, argv: string[]) {
   let output = ''
@@ -135,6 +135,48 @@ describe('serve', () => {
         command: fail
         duration: <stripped>"
     `)
+  })
+
+  test('ClacError in run() populates code/hint/retryable in envelope', async () => {
+    const cli = Cli.create('test')
+    cli.command('fail', {
+      run() {
+        throw new Errors.ClacError({
+          code: 'NOT_AUTHENTICATED',
+          message: 'Token not found',
+          hint: 'Set GH_TOKEN env var',
+          retryable: false,
+        })
+      },
+    })
+
+    const { output, exitCode } = await serve(cli, ['fail'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "ok: false
+      error:
+        code: NOT_AUTHENTICATED
+        message: Token not found
+        hint: Set GH_TOKEN env var
+        retryable: false
+      meta:
+        command: fail
+        duration: <stripped>"
+    `)
+  })
+
+  test('ValidationError includes fieldErrors in envelope', async () => {
+    const cli = Cli.create('test')
+    cli.command('greet', {
+      args: z.object({ name: z.string() }),
+      run({ args }) {
+        return { message: `hello ${args.name}` }
+      },
+    })
+
+    const { output, exitCode } = await serve(cli, ['greet'])
+    expect(exitCode).toBe(1)
+    expect(output).toContain('fieldErrors')
   })
 
   test('supports async handlers', async () => {

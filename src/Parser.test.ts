@@ -83,28 +83,28 @@ describe('parse', () => {
     expect(result.options).toEqual({})
   })
 
-  test('throws on unknown flags', () => {
+  test('throws ParseError on unknown flags', () => {
     expect(() =>
       Parser.parse(['--unknown', 'val'], {
         options: z.object({ state: z.string() }),
       }),
-    ).toThrow(/unknown/i)
+    ).toThrow(expect.objectContaining({ name: 'Clac.ParseError' }))
   })
 
-  test('throws on missing required positional args', () => {
+  test('throws ValidationError on missing required positional args', () => {
     expect(() =>
       Parser.parse([], {
         args: z.object({ name: z.string() }),
       }),
-    ).toThrow(/name/i)
+    ).toThrow(expect.objectContaining({ name: 'Clac.ValidationError' }))
   })
 
-  test('throws on enum mismatch', () => {
+  test('throws ValidationError on enum mismatch', () => {
     expect(() =>
       Parser.parse(['--state', 'invalid'], {
         options: z.object({ state: z.enum(['open', 'closed']) }),
       }),
-    ).toThrow()
+    ).toThrow(expect.objectContaining({ name: 'Clac.ValidationError' }))
   })
 
   test('parses positional args and options together', () => {

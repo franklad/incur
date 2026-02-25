@@ -1,4 +1,6 @@
 import type { z } from 'zod'
+import type { FieldError } from './Errors.js'
+import { ParseError, ValidationError } from './Errors.js'
 
 /** Parses raw argv tokens against Zod schemas for args and options. */
 export function parse<
@@ -25,7 +27,7 @@ export function parse<
     if (token.startsWith('--no-') && token.length > 5) {
       // --no-flag negation
       const name = token.slice(5)
-      if (!knownOptions.has(name)) throw new Error(`Unknown flag: ${token}`)
+      if (!knownOptions.has(name)) throw new ParseError({ message: `Unknown flag: ${token}` })
       rawOptions[name] = false
       i++
     } else if (token.startsWith('--')) {
@@ -33,19 +35,20 @@ export function parse<
       if (eqIdx !== -1) {
         // --flag=value
         const name = token.slice(2, eqIdx)
-        if (!knownOptions.has(name)) throw new Error(`Unknown flag: --${name}`)
+        if (!knownOptions.has(name)) throw new ParseError({ message: `Unknown flag: --${name}` })
         setOption(rawOptions, name, token.slice(eqIdx + 1), optionsSchema)
         i++
       } else {
         // --flag [value]
         const name = token.slice(2)
-        if (!knownOptions.has(name)) throw new Error(`Unknown flag: ${token}`)
+        if (!knownOptions.has(name)) throw new ParseError({ message: `Unknown flag: ${token}` })
         if (isBooleanOption(name, optionsSchema)) {
           rawOptions[name] = true
           i++
         } else {
           const value = argv[i + 1]
-          if (value === undefined) throw new Error(`Missing value for flag: ${token}`)
+          if (value === undefined)
+            throw new ParseError({ message: `Missing value for flag: ${token}` })
           setOption(rawOptions, name, value, optionsSchema)
           i += 2
         }
@@ -54,13 +57,14 @@ export function parse<
       // -f [value]
       const short = token.slice(1)
       const name = aliasToName.get(short)
-      if (!name) throw new Error(`Unknown flag: ${token}`)
+      if (!name) throw new ParseError({ message: `Unknown flag: ${token}` })
       if (isBooleanOption(name, optionsSchema)) {
         rawOptions[name] = true
         i++
       } else {
         const value = argv[i + 1]
-        if (value === undefined) throw new Error(`Missing value for flag: ${token}`)
+        if (value === undefined)
+          throw new ParseError({ message: `Missing value for flag: ${token}` })
         setOption(rawOptions, name, value, optionsSchema)
         i += 2
       }
@@ -83,7 +87,7 @@ export function parse<
   }
 
   // Validate args through zod
-  const args = argsSchema ? argsSchema.parse(rawArgs) : {}
+  const args = argsSchema ? zodParse(argsSchema, rawArgs) : {}
 
   // Coerce raw option values before zod validation
   if (optionsSchema) {
@@ -93,7 +97,7 @@ export function parse<
   }
 
   // Validate options through zod
-  const parsedOptions = optionsSchema ? optionsSchema.parse(rawOptions) : {}
+  const parsedOptions = optionsSchema ? zodParse(optionsSchema, rawOptions) : {}
 
   return { args, options: parsedOptions } as parse.ReturnType<args, options>
 }
@@ -162,6 +166,26 @@ function setOption(
     }
   } else {
     raw[name] = value
+  }
+}
+
+/** Wraps zod schema.parse(), converting ZodError to ValidationError. */
+function zodParse(schema: z.ZodObject<any>, data: Record<string, unknown>) {
+  try {
+    return schema.parse(data)
+  } catch (err: any) {
+    const issues: any[] = err?.issues ?? err?.error?.issues ?? []
+    const fieldErrors: FieldError[] = issues.map((issue: any) => ({
+      path: (issue.path ?? []).join('.'),
+      expected: issue.expected ?? '',
+      received: issue.received ?? '',
+      message: issue.message ?? '',
+    }))
+    throw new ValidationError({
+      message: issues.map((i: any) => i.message).join('; ') || 'Validation failed',
+      fieldErrors,
+      cause: err instanceof Error ? err : undefined,
+    })
   }
 }
 

@@ -1,5 +1,8 @@
 import type { z } from 'zod'
+import { ClacError, ValidationError } from './Errors.js'
+import type { FieldError } from './Errors.js'
 import * as Formatter from './Formatter.js'
+import type { OneOf } from './internal/types.js'
 import * as Parser from './Parser.js'
 
 /** A CLI application instance. */
@@ -32,6 +35,47 @@ type NextCommand = {
   description?: string | undefined
   /** Pre-filled arguments for the command. */
   args?: Record<string, unknown> | undefined
+}
+
+/** The output envelope written to stdout. */
+type Output = OneOf<
+  | {
+      /** Whether the command succeeded. */
+      ok: true
+      /** The command's return data. */
+      data: unknown
+      /** Request metadata. */
+      meta: Output.Meta
+    }
+  | {
+      /** Whether the command succeeded. */
+      ok: false
+      /** Error details. */
+      error: {
+        /** Machine-readable error code. */
+        code: string
+        /** Human-readable error message. */
+        message: string
+        /** Actionable hint for the user. */
+        hint?: string | undefined
+        /** Whether the operation can be retried. */
+        retryable?: boolean | undefined
+        /** Per-field validation errors. */
+        fieldErrors?: FieldError[] | undefined
+      }
+      /** Request metadata. */
+      meta: Output.Meta
+    }
+>
+
+declare namespace Output {
+  /** Shared metadata included in every envelope. */
+  type Meta = {
+    /** The command that was invoked. */
+    command: string
+    /** Wall-clock duration of the command. */
+    duration: string
+  }
 }
 
 /** Defines a command's schema, handler, and metadata. */
@@ -80,7 +124,7 @@ export function create(name: string, _options: create.Options = {}): Cli {
       const [commandName, ...rest] = argv
       const start = performance.now()
 
-      function write(envelope: Record<string, unknown>) {
+      function write(envelope: Output) {
         stdout(Formatter.format(envelope))
       }
 
@@ -122,8 +166,11 @@ export function create(name: string, _options: create.Options = {}): Cli {
         write({
           ok: false,
           error: {
-            code: 'UNKNOWN',
+            code: error instanceof ClacError ? error.code : 'UNKNOWN',
             message: error instanceof Error ? error.message : String(error),
+            ...(error instanceof ClacError && error.hint ? { hint: error.hint } : undefined),
+            ...(error instanceof ClacError ? { retryable: error.retryable } : undefined),
+            ...(error instanceof ValidationError ? { fieldErrors: error.fieldErrors } : undefined),
           },
           meta: {
             command: commandName,
