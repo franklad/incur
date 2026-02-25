@@ -227,6 +227,8 @@ export declare namespace serve {
     stdout?: ((s: string) => void) | undefined
     /** Override exit handler. Defaults to `process.exit`. */
     exit?: ((code: number) => void) | undefined
+    /** Override TTY detection. Defaults to `process.stdout.isTTY`. */
+    tty?: boolean | undefined
   }
 }
 
@@ -241,21 +243,29 @@ async function serveImpl(
   const stdout = options.stdout ?? ((s: string) => process.stdout.write(s))
   const exit = options.exit ?? ((code: number) => process.exit(code))
 
-  const { verbose, format, llms, help, version, rest: filtered } = extractBuiltinFlags(argv)
+  const { verbose, format, formatExplicit, llms, help, version, tty: ttyFlag, rest: filtered } = extractBuiltinFlags(argv)
+
+  // TTY mode: human is at the terminal; suppress structured output unless overridden
+  const tty = ttyFlag ?? options.tty ?? process.stdout.isTTY ?? false
+  const human = tty && !formatExplicit && !verbose
+
+  function writeln(s: string) {
+    stdout(s.endsWith('\n') ? s : `${s}\n`)
+  }
 
   if (llms) {
-    stdout(Formatter.format(buildManifest(commands), format))
+    writeln(Formatter.format(buildManifest(commands), format))
     return
   }
 
   // --help takes precedence over --version
   if (version && !help && options.version) {
-    stdout(options.version)
+    writeln(options.version)
     return
   }
 
   if (filtered.length === 0) {
-    stdout(
+    writeln(
       Help.formatRoot(name, {
         description: options.description,
         commands: collectHelpCommands(commands),
@@ -273,14 +283,14 @@ async function serveImpl(
       const helpName = 'help' in resolved ? `${name} ${resolved.path}` : name
       const helpDesc = 'help' in resolved ? resolved.description : options.description
       const helpCmds = 'help' in resolved ? resolved.commands : commands
-      stdout(
+      writeln(
         Help.formatRoot(helpName, {
           description: helpDesc,
           commands: collectHelpCommands(helpCmds),
         }),
       )
     } else {
-      stdout(
+      writeln(
         Help.formatCommand(`${name} ${resolved.path}`, {
           description: resolved.command.description,
           args: resolved.command.args,
@@ -292,7 +302,7 @@ async function serveImpl(
   }
 
   if ('help' in resolved) {
-    stdout(
+    writeln(
       Help.formatRoot(`${name} ${resolved.path}`, {
         description: resolved.description,
         commands: collectHelpCommands(resolved.commands),
@@ -304,12 +314,22 @@ async function serveImpl(
   const start = performance.now()
 
   function write(output: Output) {
-    if (verbose) return stdout(Formatter.format(output, format))
-    if (output.ok) stdout(Formatter.format(output.data, format))
-    else stdout(Formatter.format(output.error, format))
+    if (human) {
+      if (output.ok) return // handler owns stdout in TTY mode
+      writeln(formatHumanError(output.error))
+      return
+    }
+    if (verbose) return writeln(Formatter.format(output, format))
+    if (output.ok) writeln(Formatter.format(output.data, format))
+    else writeln(Formatter.format(output.error, format))
   }
 
   function writeError(message: string, commandPath: string) {
+    if (human) {
+      writeln(formatHumanError({ code: 'COMMAND_NOT_FOUND', message }))
+      exit(1)
+      return
+    }
     write({
       ok: false,
       error: { code: 'COMMAND_NOT_FOUND', message },
@@ -462,6 +482,8 @@ function extractBuiltinFlags(argv: string[]) {
   let help = false
   let version = false
   let format: Formatter.Format = 'toon'
+  let formatExplicit = false
+  let tty: boolean | undefined
   const rest: string[] = []
 
   for (let i = 0; i < argv.length; i++) {
@@ -470,14 +492,19 @@ function extractBuiltinFlags(argv: string[]) {
     else if (token === '--llms') llms = true
     else if (token === '--help' || token === '-h') help = true
     else if (token === '--version') version = true
-    else if (token === '--json') format = 'json'
-    else if (token === '--format' && argv[i + 1]) {
+    else if (token === '--tty') tty = true
+    else if (token === '--no-tty') tty = false
+    else if (token === '--json') {
+      format = 'json'
+      formatExplicit = true
+    } else if (token === '--format' && argv[i + 1]) {
       format = argv[i + 1] as Formatter.Format
+      formatExplicit = true
       i++
     } else rest.push(token)
   }
 
-  return { verbose, format, llms, help, version, rest }
+  return { verbose, format, formatExplicit, llms, help, version, tty, rest }
 }
 
 /** @internal Collects immediate child commands/groups for help output. */
@@ -544,6 +571,18 @@ type CtaBlock<commands extends CommandsMap = Commands> = {
   commands: Cta<commands>[]
   /** Human-readable label. Defaults to `"Suggested commands:"`. */
   description?: string | undefined
+}
+
+/** @internal Formats an error for human-readable TTY output. */
+function formatHumanError(error: { code: string; message: string; fieldErrors?: FieldError[] | undefined }): string {
+  const prefix = error.code === 'UNKNOWN' || error.code === 'COMMAND_NOT_FOUND'
+    ? 'Error'
+    : `Error (${error.code})`
+  let out = `${prefix}: ${error.message}`
+  if (error.fieldErrors)
+    for (const fe of error.fieldErrors)
+      out += `\n  ${fe.path}: ${fe.message}`
+  return out
 }
 
 /** @internal Type guard for sentinel results. */
