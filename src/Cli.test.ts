@@ -196,4 +196,42 @@ describe('serve', () => {
     const { output } = await serve(cli, ['async'])
     expect(output).toMatchInlineSnapshot(`"done: true"`)
   })
+
+  test('--format json outputs JSON data', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['ping', '--format', 'json'])
+    expect(JSON.parse(output)).toEqual({ pong: true })
+  })
+
+  test('--json is shorthand for --format json', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['ping', '--json'])
+    expect(JSON.parse(output)).toEqual({ pong: true })
+  })
+
+  test('--verbose --format json outputs full envelope as JSON', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['ping', '--verbose', '--format', 'json'])
+    const parsed = JSON.parse(output)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data).toEqual({ pong: true })
+    expect(parsed.meta.command).toBe('ping')
+  })
+
+  test('error output respects --format json', async () => {
+    const cli = Cli.create('test')
+    cli.command('fail', {
+      run() {
+        throw new Error('boom')
+      },
+    })
+    const { output, exitCode } = await serve(cli, ['fail', '--format', 'json'])
+    expect(exitCode).toBe(1)
+    const parsed = JSON.parse(output)
+    expect(parsed.code).toBe('UNKNOWN')
+    expect(parsed.message).toBe('boom')
+  })
 })

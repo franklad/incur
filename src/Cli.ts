@@ -1,6 +1,6 @@
 import type { z } from 'zod'
-import { ClacError, ValidationError } from './Errors.js'
 import type { FieldError } from './Errors.js'
+import { ClacError, ValidationError } from './Errors.js'
 import * as Formatter from './Formatter.js'
 import type { OneOf } from './internal/types.js'
 import * as Parser from './Parser.js'
@@ -122,16 +122,15 @@ export function create(name: string, _options: create.Options = {}): Cli {
       const exit = options.exit ?? ((code: number) => process.exit(code))
 
       // Extract built-in flags before command parsing
-      const verbose = argv.includes('--verbose')
-      const filtered = argv.filter((t) => t !== '--verbose')
+      const { verbose, format, rest: filtered } = extractBuiltinFlags(argv)
 
       const [commandName, ...rest] = filtered
       const start = performance.now()
 
       function write(output: Output) {
-        if (verbose) return stdout(Formatter.format(output))
-        if (output.ok) stdout(Formatter.format(output.data as Record<string, unknown>))
-        else stdout(Formatter.format(output.error as Record<string, unknown>))
+        if (verbose) return stdout(Formatter.format(output, format))
+        if (output.ok) stdout(Formatter.format(output.data, format))
+        else stdout(Formatter.format(output.error, format))
       }
 
       if (!commandName || !commands.has(commandName)) {
@@ -207,4 +206,23 @@ export declare namespace serve {
     /** Override exit handler. Defaults to `process.exit`. */
     exit?: ((code: number) => void) | undefined
   }
+}
+
+/** Extracts built-in flags (--verbose, --format, --json) from argv. */
+function extractBuiltinFlags(argv: string[]) {
+  let verbose = false
+  let format: Formatter.Format = 'toon'
+  const rest: string[] = []
+
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i]!
+    if (token === '--verbose') verbose = true
+    else if (token === '--json') format = 'json'
+    else if (token === '--format' && argv[i + 1]) {
+      format = argv[i + 1] as Formatter.Format
+      i++
+    } else rest.push(token)
+  }
+
+  return { verbose, format, rest }
 }
