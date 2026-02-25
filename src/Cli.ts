@@ -9,14 +9,42 @@ import * as Parser from './Parser.js'
 export type Cli = {
   /** The name of the CLI application. */
   name: string
-  /** Registers a command and returns the CLI instance for chaining. */
-  command<
-    const args extends z.ZodObject<any> | undefined = undefined,
-    const options extends z.ZodObject<any> | undefined = undefined,
-    const output extends z.ZodObject<any> | undefined = undefined,
-  >(name: string, definition: CommandDefinition<args, options, output>): Cli
+  /** Registers a command or mounts a command group. Returns the CLI instance for chaining. */
+  command: {
+    <
+      const args extends z.ZodObject<any> | undefined = undefined,
+      const options extends z.ZodObject<any> | undefined = undefined,
+      const output extends z.ZodObject<any> | undefined = undefined,
+    >(
+      name: string,
+      definition: CommandDefinition<args, options, output>,
+    ): Cli
+    /** Mounts a command group. */
+    (group: CommandGroup): Cli
+  }
   /** Parses argv, runs the matched command, and writes the output envelope to stdout. */
   serve(argv?: string[], options?: serve.Options): Promise<void>
+}
+
+/** A command group that contains sub-commands. */
+export type CommandGroup = {
+  /** The command group name. */
+  name: string
+  /** A short description of the command group. */
+  description?: string | undefined
+  /** Registers a sub-command or mounts a nested command group. Returns the group for chaining. */
+  command: {
+    <
+      const args extends z.ZodObject<any> | undefined = undefined,
+      const options extends z.ZodObject<any> | undefined = undefined,
+      const output extends z.ZodObject<any> | undefined = undefined,
+    >(
+      name: string,
+      definition: CommandDefinition<args, options, output>,
+    ): CommandGroup
+    /** Mounts a nested command group. */
+    (group: CommandGroup): CommandGroup
+  }
 }
 
 /** Inferred output type of a Zod schema, or `{}` when the schema is not provided. */
@@ -107,13 +135,14 @@ type CommandDefinition<
 
 /** Creates a new CLI application. */
 export function create(name: string, _options: create.Options = {}): Cli {
-  const commands = new Map<string, CommandDefinition<any, any, any>>()
+  const commands = new Map<string, CommandEntry>()
 
   return {
     name,
 
-    command(name, def) {
-      commands.set(name, def as CommandDefinition<any, any, any>)
+    command(nameOrGroup: any, def?: any) {
+      if (typeof nameOrGroup === 'string') commands.set(nameOrGroup, def)
+      else commands.set(nameOrGroup.name, commandToGroup.get(nameOrGroup)!)
       return this
     },
 
@@ -124,7 +153,6 @@ export function create(name: string, _options: create.Options = {}): Cli {
       // Extract built-in flags before command parsing
       const { verbose, format, rest: filtered } = extractBuiltinFlags(argv)
 
-      const [commandName, ...rest] = filtered
       const start = performance.now()
 
       function write(output: Output) {
@@ -133,23 +161,26 @@ export function create(name: string, _options: create.Options = {}): Cli {
         else stdout(Formatter.format(output.error, format))
       }
 
-      if (!commandName || !commands.has(commandName)) {
+      function writeError(message: string, commandPath: string) {
         write({
           ok: false,
-          error: {
-            code: 'COMMAND_NOT_FOUND',
-            message: `Unknown command: ${commandName ?? '(none)'}`,
-          },
+          error: { code: 'COMMAND_NOT_FOUND', message },
           meta: {
-            command: commandName ?? '',
+            command: commandPath,
             duration: `${Math.round(performance.now() - start)}ms`,
           },
         })
         exit(1)
+      }
+
+      // Resolve command by walking the tree
+      const resolved = resolveCommand(commands, filtered)
+      if ('error' in resolved) {
+        writeError(resolved.error, resolved.path)
         return
       }
 
-      const command = commands.get(commandName)!
+      const { command, path, rest } = resolved
 
       try {
         const { args, options: parsedOptions } = Parser.parse(rest, {
@@ -163,7 +194,7 @@ export function create(name: string, _options: create.Options = {}): Cli {
           ok: true,
           data,
           meta: {
-            command: commandName,
+            command: path,
             duration: `${Math.round(performance.now() - start)}ms`,
           },
         })
@@ -178,7 +209,7 @@ export function create(name: string, _options: create.Options = {}): Cli {
             ...(error instanceof ValidationError ? { fieldErrors: error.fieldErrors } : undefined),
           },
           meta: {
-            command: commandName,
+            command: path,
             duration: `${Math.round(performance.now() - start)}ms`,
           },
         })
@@ -208,6 +239,70 @@ export declare namespace serve {
   }
 }
 
+/** Creates a command group that accepts sub-commands. */
+export function command(name: string, options: command.Options = {}): CommandGroup {
+  const commands = new Map<string, CommandEntry>()
+  const group: InternalGroup = { _group: true, description: options.description, commands }
+
+  const cmd: CommandGroup = {
+    name,
+    description: options.description,
+    command(nameOrGroup: any, def?: any) {
+      if (typeof nameOrGroup === 'string') commands.set(nameOrGroup, def)
+      else commands.set(nameOrGroup.name, commandToGroup.get(nameOrGroup)!)
+      return cmd
+    },
+  }
+
+  commandToGroup.set(cmd, group)
+  return cmd
+}
+
+export declare namespace command {
+  /** Options for creating a command group. */
+  type Options = {
+    /** A short description of the command group. */
+    description?: string | undefined
+  }
+}
+
+/** Resolves a command from the tree by walking tokens until a leaf is found. */
+function resolveCommand(
+  commands: Map<string, CommandEntry>,
+  tokens: string[],
+):
+  | { command: CommandDefinition<any, any, any>; path: string; rest: string[] }
+  | { error: string; path: string } {
+  const [first, ...rest] = tokens
+
+  if (!first || !commands.has(first))
+    return { error: `Unknown command: ${first ?? '(none)'}`, path: first ?? '' }
+
+  let entry = commands.get(first)!
+  const path = [first]
+  let remaining = rest
+
+  while (isGroup(entry)) {
+    const next = remaining[0]
+    const available = [...entry.commands.keys()].sort().join(', ')
+    if (!next)
+      return {
+        error: `No subcommand provided for ${path.join(' ')}. Available: ${available}`,
+        path: path.join(' '),
+      }
+
+    const child = entry.commands.get(next)
+    if (!child)
+      return { error: `Unknown subcommand: ${next}. Available: ${available}`, path: path.join(' ') }
+
+    path.push(next)
+    remaining = remaining.slice(1)
+    entry = child
+  }
+
+  return { command: entry, path: path.join(' '), rest: remaining }
+}
+
 /** Extracts built-in flags (--verbose, --format, --json) from argv. */
 function extractBuiltinFlags(argv: string[]) {
   let verbose = false
@@ -226,3 +321,21 @@ function extractBuiltinFlags(argv: string[]) {
 
   return { verbose, format, rest }
 }
+
+/** @internal Entry stored in a command map — either a leaf definition or a group. */
+type CommandEntry = CommandDefinition<any, any, any> | InternalGroup
+
+/** @internal A command group's internal storage. */
+type InternalGroup = {
+  _group: true
+  description?: string | undefined
+  commands: Map<string, CommandEntry>
+}
+
+/** @internal Type guard for command groups. */
+function isGroup(entry: CommandEntry): entry is InternalGroup {
+  return '_group' in entry
+}
+
+/** @internal Maps public CommandGroup objects to their internal group data. */
+const commandToGroup = new WeakMap<CommandGroup, InternalGroup>()

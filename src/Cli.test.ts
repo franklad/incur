@@ -235,3 +235,167 @@ describe('serve', () => {
     expect(parsed.message).toBe('boom')
   })
 })
+
+describe('subcommands', () => {
+  test('creates a command group with name and description', () => {
+    const pr = Cli.command('pr', { description: 'PR management' })
+    expect(pr.name).toBe('pr')
+    expect(pr.description).toBe('PR management')
+  })
+
+  test('group registers sub-commands and is chainable', () => {
+    const pr = Cli.command('pr', { description: 'PR management' })
+    const result = pr.command('list', { run: () => ({ count: 0 }) })
+    expect(result).toBe(pr)
+  })
+
+  test('routes to sub-command', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    pr.command('list', { run: () => ({ count: 0 }) })
+    cli.command(pr)
+
+    const { output } = await serve(cli, ['pr', 'list'])
+    expect(output).toMatchInlineSnapshot(`"count: 0"`)
+  })
+
+  test('sub-command receives parsed args and options', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    pr.command('get', {
+      args: z.object({ id: z.string() }),
+      options: z.object({ draft: z.boolean().default(false) }),
+      run: ({ args, options }) => ({ id: args.id, draft: options.draft }),
+    })
+    cli.command(pr)
+
+    const { output } = await serve(cli, ['pr', 'get', '42', '--draft'])
+    expect(output).toMatchInlineSnapshot(`
+      "id: "42"
+      draft: true"
+    `)
+  })
+
+  test('--verbose shows full command path in meta', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    pr.command('list', { run: () => ({ count: 0 }) })
+    cli.command(pr)
+
+    const { output } = await serve(cli, ['pr', 'list', '--verbose'])
+    expect(output).toMatchInlineSnapshot(`
+      "ok: true
+      data:
+        count: 0
+      meta:
+        command: pr list
+        duration: <stripped>"
+    `)
+  })
+
+  test('routes to deeply nested sub-commands', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    const review = Cli.command('review', { description: 'Reviews' })
+    review.command('approve', { run: () => ({ approved: true }) })
+    pr.command(review)
+    cli.command(pr)
+
+    const { output } = await serve(cli, ['pr', 'review', 'approve'])
+    expect(output).toMatchInlineSnapshot(`"approved: true"`)
+  })
+
+  test('nested group shows full path in verbose meta', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    const review = Cli.command('review', { description: 'Reviews' })
+    review.command('approve', { run: () => ({ approved: true }) })
+    pr.command(review)
+    cli.command(pr)
+
+    const { output } = await serve(cli, ['pr', 'review', 'approve', '--verbose'])
+    expect(output).toMatchInlineSnapshot(`
+      "ok: true
+      data:
+        approved: true
+      meta:
+        command: pr review approve
+        duration: <stripped>"
+    `)
+  })
+
+  test('unknown subcommand lists available commands', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    pr.command('list', { run: () => ({}) })
+    pr.command('create', { run: () => ({}) })
+    cli.command(pr)
+
+    const { output, exitCode } = await serve(cli, ['pr', 'unknown'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: COMMAND_NOT_FOUND
+      message: "Unknown subcommand: unknown. Available: create, list""
+    `)
+  })
+
+  test('group without subcommand lists available commands', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    pr.command('list', { run: () => ({}) })
+    pr.command('create', { run: () => ({}) })
+    cli.command(pr)
+
+    const { output, exitCode } = await serve(cli, ['pr'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: COMMAND_NOT_FOUND
+      message: "No subcommand provided for pr. Available: create, list""
+    `)
+  })
+
+  test('sub-commands from separate module can be mounted', async () => {
+    function createPrCommands() {
+      const pr = Cli.command('pr', { description: 'PR management' })
+      pr.command('list', { run: () => ({ count: 0 }) })
+      return pr
+    }
+
+    const cli = Cli.create('test')
+    cli.command(createPrCommands())
+
+    const { output } = await serve(cli, ['pr', 'list'])
+    expect(output).toMatchInlineSnapshot(`"count: 0"`)
+  })
+
+  test('error in sub-command wraps in error envelope', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    pr.command('fail', {
+      run() {
+        throw new Error('sub-boom')
+      },
+    })
+    cli.command(pr)
+
+    const { output, exitCode } = await serve(cli, ['pr', 'fail'])
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "code: UNKNOWN
+      message: sub-boom"
+    `)
+  })
+
+  test('group error respects --format json', async () => {
+    const cli = Cli.create('test')
+    const pr = Cli.command('pr', { description: 'PR management' })
+    pr.command('list', { run: () => ({}) })
+    cli.command(pr)
+
+    const { output, exitCode } = await serve(cli, ['pr', 'unknown', '--format', 'json'])
+    expect(exitCode).toBe(1)
+    const parsed = JSON.parse(output)
+    expect(parsed.code).toBe('COMMAND_NOT_FOUND')
+    expect(parsed.message).toContain('unknown')
+  })
+})
