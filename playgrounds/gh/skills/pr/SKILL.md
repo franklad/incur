@@ -55,6 +55,13 @@ List pull requests in a repository
 | `items[].author` | `string` | yes |  |
 | `totalCount` | `number` | yes |  |
 
+## Examples
+
+```sh
+# List open pull requests
+gh pr list --state open
+```
+
 ---
 
 # gh pr merge

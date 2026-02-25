@@ -8,7 +8,7 @@ export type CommandInfo = {
   args?: z.ZodObject<any> | undefined
   options?: z.ZodObject<any> | undefined
   output?: z.ZodObject<any> | undefined
-  annotations?: Record<string, boolean> | undefined
+  examples?: { command: string; description?: string }[] | undefined
 }
 
 /** A skill file entry with its directory name and content. */
@@ -146,6 +146,15 @@ function renderCommandBody(cli: string, cmd: CommandInfo, level = 1): string {
     const outputSchema = Schema.toJsonSchema(cmd.output)
     const table = schemaToTable(outputSchema)
     if (table) sections.push(`${sub} Output\n\n${table}`)
+  }
+
+  // Examples
+  if (cmd.examples && cmd.examples.length > 0) {
+    const lines = cmd.examples.map((ex) => {
+      const comment = ex.description ? `# ${ex.description}\n` : ''
+      return `${comment}${cli} ${ex.command}`
+    })
+    sections.push(`${sub} Examples\n\n\`\`\`sh\n${lines.join('\n\n')}\n\`\`\``)
   }
 
   return sections.join('\n\n')

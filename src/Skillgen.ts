@@ -48,6 +48,14 @@ function collectEntries(
       if (entry.args) cmd.args = entry.args
       if (entry.options) cmd.options = entry.options
       if (entry.output) cmd.output = entry.output
+      const examples = Cli.formatExamples(entry.examples)
+      if (examples) {
+        const cmdName = path.join(' ')
+        cmd.examples = examples.map((e) => ({
+          ...e,
+          command: e.command ? `${cmdName} ${e.command}` : cmdName,
+        }))
+      }
       result.push(cmd)
     }
   }

@@ -317,29 +317,6 @@ describe('--llms', () => {
     expect(manifest.commands[0].schema).toBeUndefined()
   })
 
-  test('manifest includes annotations when defined', async () => {
-    const cli = Cli.create('test')
-    cli.command('list', {
-      description: 'List items',
-      readOnly: true,
-      openWorld: true,
-      run: () => ({ items: [] }),
-    })
-
-    const { output } = await serve(cli, ['--llms', '--format', 'json'])
-    const manifest = JSON.parse(output)
-    expect(manifest.commands[0].annotations).toEqual({ readOnlyHint: true, openWorldHint: true })
-  })
-
-  test('manifest omits annotations when not defined', async () => {
-    const cli = Cli.create('test')
-    cli.command('ping', { run: () => ({ pong: true }) })
-
-    const { output } = await serve(cli, ['--llms', '--format', 'json'])
-    const manifest = JSON.parse(output)
-    expect(manifest.commands[0].annotations).toBeUndefined()
-  })
-
   test('nested commands appear with full path in manifest', async () => {
     const cli = Cli.create('test')
     const pr = Cli.create('pr', { description: 'PR management' })
@@ -403,7 +380,6 @@ describe('--llms', () => {
       args: z.object({ name: z.string().describe('Name to greet') }),
       options: z.object({ loud: z.boolean().default(false).describe('Shout it') }),
       output: z.object({ message: z.string() }),
-      readOnly: true,
       run: ({ args }) => ({ message: `hello ${args.name}` }),
     })
 
@@ -412,9 +388,6 @@ describe('--llms', () => {
       {
         "commands": [
           {
-            "annotations": {
-              "readOnlyHint": true,
-            },
             "description": "Greet someone",
             "name": "greet",
             "schema": {
@@ -471,7 +444,6 @@ describe('--llms', () => {
       description: 'Greet someone',
       args: z.object({ name: z.string().describe('Name to greet') }),
       output: z.object({ message: z.string() }),
-      readOnly: true,
       run: ({ args }) => ({ message: `hello ${args.name}` }),
     })
 

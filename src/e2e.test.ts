@@ -569,6 +569,27 @@ describe('help', () => {
     `)
   })
 
+  test('--help includes examples', async () => {
+    const { output } = await serve(createApp(), ['project', 'deploy', 'create', '--help'])
+    expect(output).toMatchInlineSnapshot(`
+      "app project deploy create — Create a deployment
+
+      Usage: app project deploy create <env>
+
+      Arguments:
+        env  Target environment
+
+      Options:
+        --branch <string>   Branch to deploy (default: main)
+        --dryRun <boolean>  Dry run mode (default: false)
+
+      Examples:
+        $ app project deploy create staging                                    Deploy staging from main
+        $ app project deploy create production --branch release --dryRun true  Dry run a production deploy
+      "
+    `)
+  })
+
   test('--help on group shows group help', async () => {
     const { output } = await serve(createApp(), ['project', '--help'])
     expect(output).toContain('app project')
@@ -791,37 +812,6 @@ describe('--llms', () => {
     `)
   })
 
-  test('manifest includes annotations', async () => {
-    const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
-    const manifest = json(output)
-
-    const authLogout = manifest.commands.find((c: any) => c.name === 'auth logout')
-    expect(authLogout.annotations).toMatchInlineSnapshot(`
-      {
-        "destructiveHint": true,
-      }
-    `)
-
-    const authLogin = manifest.commands.find((c: any) => c.name === 'auth login')
-    expect(authLogin.annotations).toMatchInlineSnapshot(`
-      {
-        "idempotentHint": true,
-        "openWorldHint": true,
-      }
-    `)
-
-    const projectList = manifest.commands.find((c: any) => c.name === 'project list')
-    expect(projectList.annotations).toMatchInlineSnapshot(`
-      {
-        "openWorldHint": true,
-        "readOnlyHint": true,
-      }
-    `)
-
-    const ping = manifest.commands.find((c: any) => c.name === 'ping')
-    expect(ping.annotations).toBeUndefined()
-  })
-
   test('manifest omits schema when no schemas defined', async () => {
     const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
     const ping = json(output).commands.find((c: any) => c.name === 'ping')
@@ -869,6 +859,36 @@ describe('--llms', () => {
     const { output } = await serve(createApp(), ['project', '--llms'])
     expect(output).toContain('Options')
     expect(output).toContain('`--limit`')
+  })
+
+  test('--llms json includes examples on commands', async () => {
+    const { output } = await serve(createApp(), ['project', 'deploy', '--llms', '--format', 'json'])
+    const deployCreate = json(output).commands.find((c: any) => c.name === 'project deploy create')
+    expect(deployCreate.examples).toMatchInlineSnapshot(`
+      [
+        {
+          "command": "project deploy create staging",
+          "description": "Deploy staging from main",
+        },
+        {
+          "command": "project deploy create production --branch release --dryRun true",
+          "description": "Dry run a production deploy",
+        },
+      ]
+    `)
+  })
+
+  test('--llms json omits examples when not defined', async () => {
+    const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
+    const ping = json(output).commands.find((c: any) => c.name === 'ping')
+    expect(ping.examples).toBeUndefined()
+  })
+
+  test('--llms markdown includes examples section', async () => {
+    const { output } = await serve(createApp(), ['--llms'])
+    expect(output).toContain('Examples')
+    expect(output).toContain('Deploy staging from main')
+    expect(output).toContain('app project deploy create staging')
   })
 
   test('--llms markdown includes output tables', async () => {
@@ -1123,8 +1143,6 @@ function createApp() {
         scopes: z.array(z.string()).default([]).describe('OAuth scopes'),
       }),
       alias: { hostname: 'h', web: 'w' },
-      idempotent: true,
-      openWorld: true,
       run({ options, ok }) {
         return ok(
           { hostname: options.hostname, scopes: options.scopes },
@@ -1139,14 +1157,12 @@ function createApp() {
     })
     .command('logout', {
       description: 'Log out of the service',
-      destructive: true,
       run({ ok }) {
         return ok({ loggedOut: true })
       },
     })
     .command('status', {
       description: 'Show authentication status',
-      readOnly: true,
       output: z.object({ loggedIn: z.boolean(), hostname: z.string(), user: z.string() }),
       run({ error }) {
         return error({
@@ -1167,8 +1183,7 @@ function createApp() {
         archived: z.boolean().default(false).describe('Include archived'),
       }),
       alias: { limit: 'l', sort: 's' },
-      readOnly: true,
-      openWorld: true,
+
       output: z.object({
         items: z.array(
           z.object({
@@ -1200,8 +1215,6 @@ function createApp() {
     .command('get', {
       description: 'Get a project by ID',
       args: z.object({ id: z.string().describe('Project ID') }),
-      readOnly: true,
-      openWorld: true,
       output: z.object({
         id: z.string(),
         name: z.string(),
@@ -1225,7 +1238,7 @@ function createApp() {
         private: z.boolean().default(false).describe('Private project'),
       }),
       alias: { description: 'd' },
-      openWorld: true,
+
       output: z.object({ id: z.string(), url: z.string() }),
       run({ args, ok }) {
         return ok(
@@ -1248,8 +1261,8 @@ function createApp() {
         force: z.boolean().default(false).describe('Skip confirmation'),
       }),
       alias: { force: 'f' },
-      destructive: true,
-      openWorld: true,
+
+
       run({ args, options }) {
         if (!options.force)
           throw new Errors.ClacError({
@@ -1270,8 +1283,16 @@ function createApp() {
         dryRun: z.boolean().default(false).describe('Dry run mode'),
       }),
       alias: { branch: 'b' },
-      openWorld: true,
+
       output: z.object({ deployId: z.string(), url: z.string(), status: z.string() }),
+      examples: [
+        { description: 'Deploy staging from main', args: { env: 'staging' } },
+        {
+          description: 'Dry run a production deploy',
+          args: { env: 'production' },
+          options: { branch: 'release', dryRun: true },
+        },
+      ],
       run({ args, options, ok }) {
         return ok({
           deployId: 'd-123',
@@ -1283,8 +1304,7 @@ function createApp() {
     .command('status', {
       description: 'Check deployment status',
       args: z.object({ deployId: z.string().describe('Deployment ID') }),
-      readOnly: true,
-      openWorld: true,
+
       output: z.object({ deployId: z.string(), status: z.string(), progress: z.number() }),
       run({ args }) {
         return { deployId: args.deployId, status: 'running', progress: 75 }
@@ -1293,8 +1313,8 @@ function createApp() {
     .command('rollback', {
       description: 'Rollback a deployment',
       args: z.object({ deployId: z.string().describe('Deployment ID') }),
-      destructive: true,
-      openWorld: true,
+
+
       run({ args }) {
         return { rolledBack: true, deployId: args.deployId }
       },
@@ -1305,7 +1325,6 @@ function createApp() {
   const config = Cli.create('config', {
     description: 'Show current configuration',
     args: z.object({ key: z.string().optional().describe('Config key to show') }),
-    readOnly: true,
     run({ args }) {
       if (args.key) return { key: args.key, value: 'some-value' }
       return { apiUrl: 'https://api.example.com', timeout: 30, debug: false }
@@ -1335,8 +1354,6 @@ function createApp() {
       prefix: z.string().default('').describe('Prefix string'),
     }),
     alias: { upper: 'u', prefix: 'p' },
-    idempotent: true,
-    readOnly: true,
     run({ args, options }) {
       const count = args.repeat ?? 1
       let msg = options.prefix ? `${options.prefix} ${args.message}` : args.message

@@ -202,30 +202,24 @@ export declare namespace create {
     args?: args
     /** A short description of what the CLI does. */
     description?: string | undefined
-    /** Whether the command may perform destructive operations. */
-    destructive?: boolean | undefined
-    /** Whether the command can be called multiple times safely. */
-    idempotent?: boolean | undefined
-    /** Whether the command interacts with external systems. */
-    openWorld?: boolean | undefined
+    /** Usage examples for this command. */
+    examples?: Example<args, options>[] | undefined
     /** Zod schema for named options/flags. */
     options?: options
     /** Zod schema for the return value. */
     output?: output
-    /** Whether the command only reads data (no side effects). */
-    readOnly?: boolean | undefined
     /** The root command handler. When provided, creates a leaf CLI with no subcommands. */
     run?: (context: {
       args: InferOutput<args>
-      /** Return a success result with optional metadata (e.g. CTAs). */
-      ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
       /** Return an error result with optional CTAs. */
       error: (options: {
         code: string
+        cta?: CtaBlock
         message: string
         retryable?: boolean
-        cta?: CtaBlock
       }) => never
+      /** Return a success result with optional metadata (e.g. CTAs). */
+      ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
       options: InferOutput<options>
     }) => InferReturn<output> | Promise<InferReturn<output>>
     /** The CLI version string. */
@@ -236,10 +230,10 @@ export declare namespace create {
 export declare namespace serve {
   /** Options for `serve()`, primarily used for testing. */
   type Options = {
-    /** Override stdout writer. Defaults to `process.stdout.write`. */
-    stdout?: ((s: string) => void) | undefined
     /** Override exit handler. Defaults to `process.exit`. */
     exit?: ((code: number) => void) | undefined
+    /** Override stdout writer. Defaults to `process.stdout.write`. */
+    stdout?: ((s: string) => void) | undefined
     /** Override TTY detection. Defaults to `process.stdout.isTTY`. */
     tty?: boolean | undefined
   }
@@ -340,6 +334,7 @@ async function serveImpl(
           description: resolved.command.description,
           args: resolved.command.args,
           options: resolved.command.options,
+          examples: formatExamples(resolved.command.examples),
         }),
       )
     }
@@ -678,7 +673,7 @@ function collectCommands(
   name: string
   description?: string
   schema?: Record<string, unknown>
-  annotations?: Record<string, boolean>
+  examples?: { command: string; description?: string }[]
 }[] {
   const result: ReturnType<typeof collectCommands> = []
   for (const [name, entry] of commands) {
@@ -698,8 +693,14 @@ function collectCommands(
         if (outputSchema) cmd.schema.output = outputSchema
       }
 
-      const annotations = buildAnnotations(entry)
-      if (annotations) cmd.annotations = annotations
+      const examples = formatExamples(entry.examples)
+      if (examples) {
+        const cmdName = path.join(' ')
+        cmd.examples = examples.map((e) => ({
+          ...e,
+          command: e.command ? `${cmdName} ${e.command}` : cmdName,
+        }))
+      }
       result.push(cmd)
     }
   }
@@ -724,37 +725,34 @@ function collectSkillCommands(
       if (entry.args) cmd.args = entry.args
       if (entry.options) cmd.options = entry.options
       if (entry.output) cmd.output = entry.output
-      const annotations = buildAnnotations(entry)
-      if (annotations) cmd.annotations = annotations
+      const examples = formatExamples(entry.examples)
+      if (examples) {
+        const cmdName = path.join(' ')
+        cmd.examples = examples.map((e) => ({
+          ...e,
+          command: e.command ? `${cmdName} ${e.command}` : cmdName,
+        }))
+      }
       result.push(cmd)
     }
   }
   return result.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** @internal Extracts annotation flags from a command definition, mapped to MCP-style keys. */
-function buildAnnotations(
-  entry: CommandDefinition<any, any, any>,
-): Record<string, boolean> | undefined {
-  const map: Record<string, boolean> = {}
-  let has = false
-  if (entry.readOnly !== undefined) {
-    map.readOnlyHint = entry.readOnly
-    has = true
-  }
-  if (entry.destructive !== undefined) {
-    map.destructiveHint = entry.destructive
-    has = true
-  }
-  if (entry.idempotent !== undefined) {
-    map.idempotentHint = entry.idempotent
-    has = true
-  }
-  if (entry.openWorld !== undefined) {
-    map.openWorldHint = entry.openWorld
-    has = true
-  }
-  return has ? map : undefined
+/** @internal Formats examples into `{ command, description }` objects. `command` is the args/options suffix only. */
+export function formatExamples(
+  examples: Example<any, any>[] | undefined,
+): { command: string; description?: string }[] | undefined {
+  if (!examples || examples.length === 0) return undefined
+  return examples.map((ex) => {
+    const parts: string[] = []
+    if (ex.args) for (const value of Object.values(ex.args)) parts.push(String(value))
+    if (ex.options)
+      for (const [key, value] of Object.entries(ex.options)) parts.push(`--${key} ${value}`)
+    const result: { command: string; description?: string } = { command: parts.join(' ') }
+    if (ex.description) result.description = ex.description
+    return result
+  })
 }
 
 /** @internal Builds separate args and options JSON Schemas. */
@@ -767,6 +765,19 @@ function buildInputSchema(
   if (args) result.args = Schema.toJsonSchema(args)
   if (options) result.options = Schema.toJsonSchema(options)
   return result
+}
+
+/** @internal A usage example for a command, typed against its args and options schemas. */
+type Example<
+  args extends z.ZodObject<any> | undefined,
+  options extends z.ZodObject<any> | undefined,
+> = {
+  /** Positional arguments for this example. */
+  args?: args extends z.ZodObject<any> ? Partial<z.output<args>> | undefined : undefined
+  /** A short description of what this example demonstrates. */
+  description?: string | undefined
+  /** Named options for this example. */
+  options?: options extends z.ZodObject<any> ? Partial<z.output<options>> | undefined : undefined
 }
 
 /** @internal Inferred output type of a Zod schema, or `{}` when the schema is not provided. */
@@ -812,10 +823,10 @@ declare namespace Output {
   type Meta = {
     /** The command that was invoked. */
     command: string
-    /** Wall-clock duration of the command. */
-    duration: string
     /** Suggested next commands. */
     cta?: FormattedCtaBlock | undefined
+    /** Wall-clock duration of the command. */
+    duration: string
   }
 }
 
@@ -833,30 +844,24 @@ type CommandDefinition<
   args?: args
   /** A short description of what the command does. */
   description?: string | undefined
-  /** Whether the command may perform destructive operations. */
-  destructive?: boolean | undefined
-  /** Whether the command can be called multiple times safely. */
-  idempotent?: boolean | undefined
-  /** Whether the command interacts with external systems. */
-  openWorld?: boolean | undefined
+  /** Usage examples for this command. */
+  examples?: Example<args, options>[] | undefined
   /** Zod schema for named options/flags. */
   options?: options
   /** Zod schema for the command's return value. */
   output?: output
-  /** Whether the command only reads data (no side effects). */
-  readOnly?: boolean | undefined
   /** The command handler. */
   run(context: {
     args: InferOutput<args>
-    /** Return a success result with optional metadata (e.g. CTAs). */
-    ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
     /** Return an error result with optional CTAs. */
     error: (options: {
       code: string
+      cta?: CtaBlock
       message: string
       retryable?: boolean
-      cta?: CtaBlock
     }) => never
+    /** Return a success result with optional metadata (e.g. CTAs). */
+    ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
     options: InferOutput<options>
   }): InferReturn<output> | Promise<InferReturn<output>>
 }

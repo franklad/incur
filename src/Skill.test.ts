@@ -107,21 +107,6 @@ test('expands nested output schema', () => {
   `)
 })
 
-test('includes annotations in frontmatter', () => {
-  const result = Skill.generate('test', [
-    {
-      name: 'list',
-      description: 'List items',
-      annotations: { readOnlyHint: true },
-    },
-  ])
-  expect(result).toMatchInlineSnapshot(`
-    "# test list
-
-    List items"
-  `)
-})
-
 test('omits sections when not applicable', () => {
   const result = Skill.generate('test', [{ name: 'ping', description: 'Health check' }])
   expect(result).not.toContain('## Arguments')

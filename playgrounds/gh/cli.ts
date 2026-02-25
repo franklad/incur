@@ -26,8 +26,12 @@ const pr = Cli.create('pr', { description: 'Manage pull requests' })
       ),
       totalCount: z.number(),
     }),
-    readOnly: true,
-    openWorld: true,
+    examples: [{
+      description: 'List open pull requests',
+      options: {
+        state: 'open'
+      }
+    }],
     run({ ok }) {
       const items: { number: number; title: string; state: string; author: string }[] = []
       return ok(
@@ -55,8 +59,6 @@ const pr = Cli.create('pr', { description: 'Manage pull requests' })
       state: z.string(),
       mergeable: z.boolean(),
     }),
-    readOnly: true,
-    openWorld: true,
     run({ args, ok }) {
       const result = {
         number: args.number,
@@ -85,7 +87,6 @@ const pr = Cli.create('pr', { description: 'Manage pull requests' })
     }),
     alias: { body: 'b', draft: 'd' },
     output: z.object({ number: z.number(), url: z.string() }),
-    openWorld: true,
     run({ ok }) {
       return ok(
         { number: 1, url: `https://github.com/org/repo/pull/1` },
@@ -104,8 +105,6 @@ const pr = Cli.create('pr', { description: 'Manage pull requests' })
     }),
     alias: { method: 'm', deleteBranch: 'd' },
     output: z.object({ merged: z.boolean() }),
-    destructive: true,
-    openWorld: true,
     run() {
       return { merged: true }
     },
@@ -123,8 +122,6 @@ const issue = Cli.create('issue', { description: 'Manage issues' })
     output: z.object({
       items: z.array(z.object({ number: z.number(), title: z.string(), state: z.string() })),
     }),
-    readOnly: true,
-    openWorld: true,
     run({ ok }) {
       const items: { number: number; title: string; state: string }[] = []
       return ok(
@@ -149,7 +146,6 @@ const issue = Cli.create('issue', { description: 'Manage issues' })
     }),
     alias: { body: 'b' },
     output: z.object({ number: z.number(), url: z.string() }),
-    openWorld: true,
     run({ ok }) {
       return ok(
         { number: 1, url: `https://github.com/org/repo/issues/1` },
@@ -168,8 +164,6 @@ const issue = Cli.create('issue', { description: 'Manage issues' })
       body: z.string(),
       state: z.string(),
     }),
-    readOnly: true,
-    openWorld: true,
     run({ args }) {
       return { number: args.number, title: '', body: '', state: 'open' }
     },
@@ -181,7 +175,6 @@ const auth = Cli.create('auth', { description: 'Authenticate with GitHub' })
     options: z.object({ hostname: z.string().default('github.com') }),
     alias: { hostname: 'h' },
     output: z.object({ loggedIn: z.boolean(), hostname: z.string() }),
-    readOnly: true,
     run({ options, ok, error }) {
       if (!process.env.GH_TOKEN)
         return error({
@@ -200,8 +193,6 @@ const auth = Cli.create('auth', { description: 'Authenticate with GitHub' })
       scopes: z.array(z.string()).default([]),
     }),
     alias: { hostname: 'h', web: 'w' },
-    idempotent: true,
-    openWorld: true,
     run({ options }) {
       return { hostname: options.hostname, scopes: options.scopes }
     },
