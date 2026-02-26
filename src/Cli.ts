@@ -333,10 +333,15 @@ async function serveImpl(
     return
   }
 
-  // skills add: generate skill files and install via `<pm>x skills add`
+  // skills add: generate skill files and install via `<pm>x skills add` (only when sync is configured)
   const skillsIdx =
     filtered[0] === 'skills' ? 0 : filtered[0] === name && filtered[1] === 'skills' ? 1 : -1
-  if (skillsIdx !== -1 && filtered[skillsIdx] === 'skills' && filtered[skillsIdx + 1] === 'add') {
+  if (
+    options.sync &&
+    skillsIdx !== -1 &&
+    filtered[skillsIdx] === 'skills' &&
+    filtered[skillsIdx + 1] === 'add'
+  ) {
     if (help) {
       writeln(
         [
