@@ -153,7 +153,7 @@ describe('args and options', () => {
     const { output, exitCode } = await serve(createApp(), ['project', 'list', '--sort', 'invalid'])
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
-      "code: UNKNOWN
+      "code: VALIDATION_ERROR
       message: "Invalid option: expected one of \\"name\\"|\\"created\\"|\\"updated\\"\\n\\nDetails: [\\n  {\\n    \\"code\\": \\"invalid_value\\",\\n    \\"values\\": [\\n      \\"name\\",\\n      \\"created\\",\\n      \\"updated\\"\\n    ],\\n    \\"path\\": [\\n      \\"sort\\"\\n    ],\\n    \\"message\\": \\"Invalid option: expected one of \\\\\\"name\\\\\\"|\\\\\\"created\\\\\\"|\\\\\\"updated\\\\\\"\\"\\n  }\\n]"
       fieldErrors[1]{path,expected,received,message}:
         sort,"","","Invalid option: expected one of \\"name\\"|\\"created\\"|\\"updated\\""
@@ -210,6 +210,52 @@ describe('output formats', () => {
 
   test('--format yaml', async () => {
     const { output } = await serve(createApp(), ['ping', '--format', 'yaml'])
+    expect(output).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
+  })
+
+  test('CLI-level default format', async () => {
+    const cli = Cli.create('test', { format: 'json' })
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['ping'])
+    expect(output).toMatchInlineSnapshot(`
+      "{
+        "pong": true
+      }
+      "
+    `)
+  })
+
+  test('command-level default format', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { format: 'json', run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['ping'])
+    expect(output).toMatchInlineSnapshot(`
+      "{
+        "pong": true
+      }
+      "
+    `)
+  })
+
+  test('command-level format overrides CLI-level', async () => {
+    const cli = Cli.create('test', { format: 'yaml' })
+    cli.command('ping', { format: 'json', run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['ping'])
+    expect(output).toMatchInlineSnapshot(`
+      "{
+        "pong": true
+      }
+      "
+    `)
+  })
+
+  test('--format flag overrides command-level default', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { format: 'json', run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['ping', '--format', 'yaml'])
     expect(output).toMatchInlineSnapshot(`
       "pong: true
       "
@@ -513,6 +559,13 @@ describe('help', () => {
         project        Manage projects
         slow           Async command
         validate-fail  Fails validation
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -534,6 +587,13 @@ describe('help', () => {
         login   Log in to the service
         logout  Log out of the service
         status  Show authentication status
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -550,6 +610,13 @@ describe('help', () => {
         create    Create a deployment
         rollback  Rollback a deployment
         status    Check deployment status
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -562,9 +629,16 @@ describe('help', () => {
       Usage: app project list
 
       Options:
-        --limit <number>      Max results (default: 20)
-        --sort <value>        Sort field (default: name)
+        --limit, -l <number>  Max results (default: 20)
+        --sort, -s <value>    Sort field (default: name)
         --archived <boolean>  Include archived (default: false)
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -580,12 +654,19 @@ describe('help', () => {
         env  Target environment
 
       Options:
-        --branch <string>   Branch to deploy (default: main)
-        --dryRun <boolean>  Dry run mode (default: false)
+        --branch, -b <string>  Branch to deploy (default: main)
+        --dry-run <boolean>    Dry run mode (default: false)
 
       Examples:
         $ app project deploy create staging                                    Deploy staging from main
         $ app project deploy create production --branch release --dryRun true  Dry run a production deploy
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -613,9 +694,12 @@ describe('help', () => {
 })
 
 describe('tty', () => {
-  test('suppresses structured output in tty mode', async () => {
+  test('shows toon output in tty mode', async () => {
     const { output } = await serve(createApp(), ['ping'], { tty: true })
-    expect(output).toBe('')
+    expect(output).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
   })
 
   test('tty error shows human-readable message', async () => {
@@ -641,6 +725,30 @@ describe('tty', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "Error (NOT_AUTHENTICATED): Not logged in
+      "
+    `)
+  })
+
+  test('tty validation error shows usage hint', async () => {
+    const { output, exitCode } = await serve(createApp(), ['project', 'get'], { tty: true })
+    expect(exitCode).toBe(1)
+    expect(output).toMatchInlineSnapshot(`
+      "Error: missing required argument <id>
+      See below for usage.
+
+      app project get — Get a project by ID
+
+      Usage: app project get <id>
+
+      Arguments:
+        id  Project ID
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -1107,6 +1215,77 @@ describe('edge cases', () => {
   })
 })
 
+describe('env', () => {
+  test('env vars passed to handler', async () => {
+    const { output } = await serve(
+      createApp(),
+      ['auth', 'login', '--verbose', '--format', 'json'],
+      { env: { AUTH_HOST: 'custom.example.com' } },
+    )
+    expect(json(output).data.hostname).toBe('custom.example.com')
+  })
+
+  test('env defaults applied when var is unset', async () => {
+    const { output } = await serve(
+      createApp(),
+      ['auth', 'login', '--verbose', '--format', 'json'],
+      { env: {} },
+    )
+    expect(json(output).data.hostname).toBe('api.example.com')
+  })
+
+  test('--help shows env vars section', async () => {
+    const { output } = await serve(createApp(), ['auth', 'login', '--help'])
+    expect(output).toMatchInlineSnapshot(`
+      "app auth login — Log in to the service
+
+      Usage: app auth login
+
+      Options:
+        --hostname, -h <string>  API hostname (default: api.example.com)
+        --web, -w <boolean>      Open browser (default: false)
+        --scopes <array>         OAuth scopes
+
+      Environment Variables:
+        AUTH_TOKEN  Pre-existing auth token
+        AUTH_HOST   Auth server hostname (default: api.example.com)
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
+      "
+    `)
+  })
+
+  test('--llms json includes schema.env', async () => {
+    const { output } = await serve(createApp(), ['auth', '--llms', '--format', 'json'])
+    const login = json(output).commands.find((c: any) => c.name === 'auth login')
+    expect(login.schema.env.properties).toMatchInlineSnapshot(`
+      {
+        "AUTH_HOST": {
+          "default": "api.example.com",
+          "description": "Auth server hostname",
+          "type": "string",
+        },
+        "AUTH_TOKEN": {
+          "description": "Pre-existing auth token",
+          "type": "string",
+        },
+      }
+    `)
+  })
+
+  test('--llms markdown includes env vars table', async () => {
+    const { output } = await serve(createApp(), ['auth', '--llms'])
+    expect(output).toContain('Environment Variables')
+    expect(output).toContain('`AUTH_TOKEN`')
+    expect(output).toContain('`AUTH_HOST`')
+  })
+})
+
 async function serve(
   cli: { serve: Cli.Cli['serve'] },
   argv: string[],
@@ -1137,15 +1316,19 @@ function createApp() {
   const auth = Cli.create('auth', { description: 'Authentication commands' })
     .command('login', {
       description: 'Log in to the service',
+      env: z.object({
+        AUTH_TOKEN: z.string().optional().describe('Pre-existing auth token'),
+        AUTH_HOST: z.string().default('api.example.com').describe('Auth server hostname'),
+      }),
       options: z.object({
         hostname: z.string().default('api.example.com').describe('API hostname'),
         web: z.boolean().default(false).describe('Open browser'),
         scopes: z.array(z.string()).default([]).describe('OAuth scopes'),
       }),
       alias: { hostname: 'h', web: 'w' },
-      run({ options, ok }) {
+      run({ env, options, ok }) {
         return ok(
-          { hostname: options.hostname, scopes: options.scopes },
+          { hostname: env.AUTH_HOST, scopes: options.scopes },
           {
             cta: {
               description: 'Verify your session:',
@@ -1262,7 +1445,6 @@ function createApp() {
       }),
       alias: { force: 'f' },
 
-
       run({ args, options }) {
         if (!options.force)
           throw new Errors.ClacError({
@@ -1313,7 +1495,6 @@ function createApp() {
     .command('rollback', {
       description: 'Rollback a deployment',
       args: z.object({ deployId: z.string().describe('Deployment ID') }),
-
 
       run({ args }) {
         return { rolledBack: true, deployId: args.deployId }

@@ -25,6 +25,8 @@ export function formatRoot(name: string, options: formatRoot.Options = {}): stri
     }
   }
 
+  lines.push(...globalOptionsLines())
+
   return lines.join('\n')
 }
 
@@ -39,10 +41,14 @@ export declare namespace formatRoot {
 
 export declare namespace formatCommand {
   type Options = {
+    /** Map of option names to single-char aliases. */
+    alias?: Record<string, string> | undefined
     /** Zod schema for positional arguments. */
     args?: z.ZodObject<any> | undefined
     /** A short description of what the command does. */
     description?: string | undefined
+    /** Zod schema for environment variables. */
+    env?: z.ZodObject<any> | undefined
     /** Formatted usage examples. */
     examples?: { command: string; description?: string }[] | undefined
     /** Zod schema for named options/flags. */
@@ -52,7 +58,7 @@ export declare namespace formatCommand {
 
 /** Formats help text for a leaf command. */
 export function formatCommand(name: string, options: formatCommand.Options = {}): string {
-  const { description, args, options: opts, examples } = options
+  const { alias, description, args, env, options: opts, examples } = options
   const lines: string[] = []
 
   // Header
@@ -77,7 +83,7 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
 
   // Options
   if (opts) {
-    const entries = optionEntries(opts)
+    const entries = optionEntries(opts, alias)
     if (entries.length > 0) {
       lines.push('')
       lines.push('Options:')
@@ -89,6 +95,24 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
             ? `${entry.description} (default: ${entry.defaultValue})`
             : entry.description
         lines.push(`  ${entry.flag}${padding}  ${desc}`)
+      }
+    }
+  }
+
+  // Environment Variables
+  if (env) {
+    const entries = envEntries(env)
+    if (entries.length > 0) {
+      lines.push('')
+      lines.push('Environment Variables:')
+      const maxLen = Math.max(...entries.map((e) => e.name.length))
+      for (const entry of entries) {
+        const padding = ' '.repeat(maxLen - entry.name.length)
+        const desc =
+          entry.defaultValue !== undefined
+            ? `${entry.description} (default: ${entry.defaultValue})`
+            : entry.description
+        lines.push(`  ${entry.name}${padding}  ${desc}`)
       }
     }
   }
@@ -107,6 +131,8 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
       else lines.push(`  ${cmd}`)
     }
   }
+
+  lines.push(...globalOptionsLines())
 
   return lines.join('\n')
 }
@@ -128,12 +154,24 @@ function argsEntries(schema: z.ZodObject<any>) {
   return entries
 }
 
+/** Extracts env var entries from a Zod object schema. */
+function envEntries(schema: z.ZodObject<any>) {
+  const entries: { name: string; description: string; defaultValue?: unknown }[] = []
+  for (const [key, field] of Object.entries(schema.shape)) {
+    const defaultValue = extractDefault(field)
+    entries.push({ name: key, description: (field as any).description ?? '', defaultValue })
+  }
+  return entries
+}
+
 /** Extracts option entries from a Zod object schema. */
-function optionEntries(schema: z.ZodObject<any>) {
+function optionEntries(schema: z.ZodObject<any>, alias?: Record<string, string> | undefined) {
   const entries: { flag: string; description: string; defaultValue?: unknown }[] = []
   for (const [key, field] of Object.entries(schema.shape)) {
     const type = resolveTypeName(field)
-    const flag = `--${key} <${type}>`
+    const short = alias?.[key]
+    const kebab = toKebab(key)
+    const flag = short ? `--${kebab}, -${short} <${type}>` : `--${kebab} <${type}>`
     const defaultValue = extractDefault(field)
     entries.push({ flag, description: (field as any).description ?? '', defaultValue })
   }
@@ -168,4 +206,26 @@ function extractDefault(schema: unknown): unknown {
   }
   if (schema instanceof z.ZodOptional) return extractDefault(schema.unwrap())
   return undefined
+}
+
+/** Converts a camelCase string to kebab-case. */
+function toKebab(str: string): string {
+  return str.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+}
+
+/** Renders the global options block shared by all help output. */
+function globalOptionsLines(): string[] {
+  const flags = [
+    { flag: '--format <toon|json|yaml|md>', desc: 'Output format' },
+    { flag: '--help', desc: 'Show help' },
+    { flag: '--llms', desc: 'Print LLM-readable manifest' },
+    { flag: '--verbose', desc: 'Show full output envelope' },
+    { flag: '--version', desc: 'Show version' },
+  ]
+  const maxLen = Math.max(...flags.map((f) => f.flag.length))
+  return [
+    '',
+    'Global Options:',
+    ...flags.map((f) => `  ${f.flag}${' '.repeat(maxLen - f.flag.length)}  ${f.desc}`),
+  ]
 }

@@ -588,6 +588,13 @@ describe('subcommands', () => {
       Commands:
         create
         list
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -976,6 +983,13 @@ describe('help', () => {
 
       Commands:
         ping  Health check
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -996,6 +1010,13 @@ describe('help', () => {
 
       Commands:
         ping  Health check
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -1017,6 +1038,13 @@ describe('help', () => {
 
       Arguments:
         name  Name
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -1040,6 +1068,13 @@ describe('help', () => {
 
       Commands:
         list  List PRs
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -1068,6 +1103,13 @@ describe('help', () => {
 
       Commands:
         ping  Ping
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -1085,12 +1127,15 @@ describe('tty', () => {
     `)
   })
 
-  test('TTY suppresses data output (handler owns stdout)', async () => {
+  test('TTY shows toon output', async () => {
     const cli = Cli.create('test')
     cli.command('ping', { run: () => ({ pong: true }) })
 
     const { output } = await serve(cli, ['ping'], { tty: true })
-    expect(output).toBe('')
+    expect(output).toMatchInlineSnapshot(`
+      "pong: true
+      "
+    `)
   })
 
   test('TTY + --verbose outputs full envelope', async () => {
@@ -1205,6 +1250,13 @@ describe('tty', () => {
 
       Commands:
         ping  Health check
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
   })
@@ -1232,7 +1284,162 @@ describe('tty', () => {
 
       Commands:
         ping  Health check
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
       "
     `)
+  })
+})
+
+describe('env', () => {
+  test('parses env vars and passes to handler', async () => {
+    const cli = Cli.create('test')
+    let receivedEnv: any
+    cli.command('deploy', {
+      env: z.object({
+        API_TOKEN: z.string().describe('Auth token'),
+      }),
+      run({ env }) {
+        receivedEnv = env
+        return { ok: true }
+      },
+    })
+
+    await serve(cli, ['deploy'], { env: { API_TOKEN: 'secret-123' } })
+    expect(receivedEnv).toEqual({ API_TOKEN: 'secret-123' })
+  })
+
+  test('env validation error for missing required var', async () => {
+    const cli = Cli.create('test')
+    cli.command('deploy', {
+      env: z.object({
+        API_TOKEN: z.string().describe('Auth token'),
+      }),
+      run() {
+        return {}
+      },
+    })
+
+    const { output, exitCode } = await serve(cli, ['deploy'], { env: {} })
+    expect(exitCode).toBe(1)
+    expect(output).toContain('VALIDATION_ERROR')
+  })
+
+  test('env with defaults works when var is unset', async () => {
+    const cli = Cli.create('test')
+    let receivedEnv: any
+    cli.command('deploy', {
+      env: z.object({
+        API_URL: z.string().default('https://api.example.com').describe('API URL'),
+      }),
+      run({ env }) {
+        receivedEnv = env
+        return { ok: true }
+      },
+    })
+
+    await serve(cli, ['deploy'], { env: {} })
+    expect(receivedEnv).toEqual({ API_URL: 'https://api.example.com' })
+  })
+
+  test('--help shows environment variables section', async () => {
+    const cli = Cli.create('test')
+    cli.command('deploy', {
+      env: z.object({
+        API_TOKEN: z.string().describe('Auth token'),
+        API_URL: z.string().default('https://api.example.com').describe('API URL'),
+      }),
+      run() {
+        return {}
+      },
+    })
+
+    const { output } = await serve(cli, ['deploy', '--help'])
+    expect(output).toMatchInlineSnapshot(`
+      "test deploy
+
+      Usage: test deploy
+
+      Environment Variables:
+        API_TOKEN  Auth token
+        API_URL    API URL (default: https://api.example.com)
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
+      "
+    `)
+  })
+
+  test('--llms json includes schema.env', async () => {
+    const cli = Cli.create('test')
+    cli.command('deploy', {
+      env: z.object({
+        API_TOKEN: z.string().describe('Auth token'),
+      }),
+      run() {
+        return {}
+      },
+    })
+
+    const { output } = await serve(cli, ['--llms', '--format', 'json'])
+    const cmd = JSON.parse(output).commands.find((c: any) => c.name === 'deploy')
+    expect(cmd.schema.env).toMatchInlineSnapshot(`
+      {
+        "additionalProperties": false,
+        "properties": {
+          "API_TOKEN": {
+            "description": "Auth token",
+            "type": "string",
+          },
+        },
+        "required": [
+          "API_TOKEN",
+        ],
+        "type": "object",
+      }
+    `)
+  })
+
+  test('--llms markdown includes environment variables table', async () => {
+    const cli = Cli.create('test')
+    cli.command('deploy', {
+      env: z.object({
+        API_TOKEN: z.string().describe('Auth token'),
+      }),
+      run() {
+        return {}
+      },
+    })
+
+    const { output } = await serve(cli, ['--llms'])
+    expect(output).toContain('Environment Variables')
+    expect(output).toContain('`API_TOKEN`')
+  })
+
+  test('env coerces boolean and number values', async () => {
+    const cli = Cli.create('test')
+    let receivedEnv: any
+    cli.command('deploy', {
+      env: z.object({
+        DEBUG: z.boolean().default(false).describe('Debug mode'),
+        PORT: z.number().default(3000).describe('Port'),
+      }),
+      run({ env }) {
+        receivedEnv = env
+        return { ok: true }
+      },
+    })
+
+    await serve(cli, ['deploy'], { env: { DEBUG: 'true', PORT: '8080' } })
+    expect(receivedEnv).toEqual({ DEBUG: true, PORT: 8080 })
   })
 })

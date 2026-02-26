@@ -46,6 +46,7 @@ function collectEntries(
       const cmd: Skill.CommandInfo = { name: path.join(' ') }
       if (entry.description) cmd.description = entry.description
       if (entry.args) cmd.args = entry.args
+      if (entry.env) cmd.env = entry.env
       if (entry.options) cmd.options = entry.options
       if (entry.output) cmd.output = entry.output
       const examples = Cli.formatExamples(entry.examples)

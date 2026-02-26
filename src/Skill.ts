@@ -6,6 +6,7 @@ export type CommandInfo = {
   name: string
   description?: string | undefined
   args?: z.ZodObject<any> | undefined
+  env?: z.ZodObject<any> | undefined
   options?: z.ZodObject<any> | undefined
   output?: z.ZodObject<any> | undefined
   examples?: { command: string; description?: string }[] | undefined
@@ -121,6 +122,25 @@ function renderCommandBody(cli: string, cmd: CommandInfo, level = 1): string {
     })
     sections.push(
       `${sub} Arguments\n\n| Name | Type | Required | Description |\n|------|------|----------|-------------|\n${rows.join('\n')}`,
+    )
+  }
+
+  // Environment Variables table
+  if (cmd.env) {
+    const shape = cmd.env.shape as Record<string, z.ZodType>
+    const json = Schema.toJsonSchema(cmd.env)
+    const required = new Set((json.required as string[] | undefined) ?? [])
+    const properties = json.properties as Record<string, Record<string, unknown>> | undefined
+    const rows = Object.entries(shape).map(([key, field]) => {
+      const prop = properties?.[key]
+      const type = resolveTypeName(prop)
+      const def = prop?.default !== undefined ? String(prop.default) : ''
+      const req = required.has(key) ? 'yes' : 'no'
+      const desc = field.description ?? ''
+      return `| \`${key}\` | \`${type}\` | ${req} | ${def ? `\`${def}\`` : ''} | ${desc} |`
+    })
+    sections.push(
+      `${sub} Environment Variables\n\n| Name | Type | Required | Default | Description |\n|------|------|----------|---------|-------------|\n${rows.join('\n')}`,
     )
   }
 

@@ -13,8 +13,13 @@ export function parse<
   const aliasToName = new Map<string, string>()
   if (alias) for (const [name, short] of Object.entries(alias)) aliasToName.set(short, name)
 
-  // Known option names from schema
+  // Known option names from schema, plus kebab-case → camelCase map
   const knownOptions = new Set(optionsSchema ? Object.keys(optionsSchema.shape) : [])
+  const kebabToCamel = new Map<string, string>()
+  for (const name of knownOptions) {
+    const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+    if (kebab !== name) kebabToCamel.set(kebab, name)
+  }
 
   // First pass: split argv into positional tokens and raw option values
   const positionals: string[] = []
@@ -26,7 +31,8 @@ export function parse<
 
     if (token.startsWith('--no-') && token.length > 5) {
       // --no-flag negation
-      const name = token.slice(5)
+      const raw = token.slice(5)
+      const name = kebabToCamel.get(raw) ?? raw
       if (!knownOptions.has(name)) throw new ParseError({ message: `Unknown flag: ${token}` })
       rawOptions[name] = false
       i++
@@ -34,13 +40,15 @@ export function parse<
       const eqIdx = token.indexOf('=')
       if (eqIdx !== -1) {
         // --flag=value
-        const name = token.slice(2, eqIdx)
-        if (!knownOptions.has(name)) throw new ParseError({ message: `Unknown flag: --${name}` })
+        const raw = token.slice(2, eqIdx)
+        const name = kebabToCamel.get(raw) ?? raw
+        if (!knownOptions.has(name)) throw new ParseError({ message: `Unknown flag: --${raw}` })
         setOption(rawOptions, name, token.slice(eqIdx + 1), optionsSchema)
         i++
       } else {
         // --flag [value]
-        const name = token.slice(2)
+        const raw = token.slice(2)
+        const name = kebabToCamel.get(raw) ?? raw
         if (!knownOptions.has(name)) throw new ParseError({ message: `Unknown flag: ${token}` })
         if (isBooleanOption(name, optionsSchema)) {
           rawOptions[name] = true
@@ -189,6 +197,28 @@ function zodParse(schema: z.ZodObject<any>, data: Record<string, unknown>) {
   }
 }
 
+/** Parses environment variables against a Zod schema. Falls back to `process.env` → `Deno.env` when no source is provided. */
+export function parseEnv<const env extends z.ZodObject<any>>(
+  schema: env,
+  source: Record<string, string | undefined> = defaultEnvSource(),
+): z.output<env> {
+  const raw: Record<string, unknown> = {}
+  for (const [key, field] of Object.entries(schema.shape)) {
+    const value = source[key]
+    if (value !== undefined) raw[key] = coerceEnv(value, field as z.ZodType)
+  }
+  return zodParse(schema, raw) as z.output<env>
+}
+
+/** Coerces an env var string to the type expected by the schema field. */
+function coerceEnv(value: string, field: z.ZodType): unknown {
+  const inner = unwrap(field)
+  const typeName = inner.constructor.name
+  if (typeName === 'ZodNumber') return Number(value)
+  if (typeName === 'ZodBoolean') return value === 'true' || value === '1'
+  return value
+}
+
 /** Coerces a raw string value to the type expected by the schema. */
 function coerce(value: unknown, name: string, schema: z.ZodObject<any>): unknown {
   const field = schema.shape[name]
@@ -203,4 +233,14 @@ function coerce(value: unknown, name: string, schema: z.ZodObject<any>): unknown
     return value === 'true'
   }
   return value
+}
+
+/** Returns the best available env source for the current runtime. */
+function defaultEnvSource(): Record<string, string | undefined> {
+  if (typeof globalThis !== 'undefined') {
+    const g = globalThis as any
+    if (g.process?.env) return g.process.env
+    if (g.Deno?.env) return new Proxy({}, { get: (_, key) => g.Deno.env.get(key) }) as any
+  }
+  return {}
 }

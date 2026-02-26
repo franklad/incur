@@ -17,11 +17,12 @@ export type Cli<commands extends CommandsMap = {}> = {
     <
       const name extends string,
       const args extends z.ZodObject<any> | undefined = undefined,
+      const env extends z.ZodObject<any> | undefined = undefined,
       const options extends z.ZodObject<any> | undefined = undefined,
       const output extends z.ZodObject<any> | undefined = undefined,
     >(
       name: name,
-      definition: CommandDefinition<args, options, output>,
+      definition: CommandDefinition<args, env, options, output>,
     ): Cli<commands & { [key in name]: { args: InferOutput<args>; options: InferOutput<options> } }>
     /** Mounts a sub-CLI as a command group. */
     <const name extends string, const sub extends CommandsMap>(
@@ -100,32 +101,36 @@ export type Cta<commands extends CommandsMap = Commands> =
 /** Creates a leaf CLI with a root handler and no subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
+  const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodObject<any> | undefined = undefined,
 >(
   name: string,
-  definition: create.Options<args, opts, output> & { run: Function },
+  definition: create.Options<args, env, opts, output> & { run: Function },
 ): Root<args, opts>
 /** Creates a router CLI that registers subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
+  const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodObject<any> | undefined = undefined,
->(name: string, definition?: create.Options<args, opts, output>): Cli
+>(name: string, definition?: create.Options<args, env, opts, output>): Cli
 /** Creates a leaf CLI from a single options object (e.g. package.json). */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
+  const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodObject<any> | undefined = undefined,
 >(
-  definition: create.Options<args, opts, output> & { name: string; run: Function },
+  definition: create.Options<args, env, opts, output> & { name: string; run: Function },
 ): Root<args, opts>
 /** Creates a router CLI from a single options object (e.g. package.json). */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
+  const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodObject<any> | undefined = undefined,
->(definition: create.Options<args, opts, output> & { name: string }): Cli
+>(definition: create.Options<args, env, opts, output> & { name: string }): Cli
 export function create(
   nameOrDefinition: string | (any & { name: string }),
   definition?: any,
@@ -143,8 +148,9 @@ export function create(
       async serve(argv = process.argv.slice(2), options: serve.Options = {}) {
         return serveImpl(name, leafCommands, [name, ...argv], {
           ...options,
-          version: def.version,
           description: def.description,
+          format: def.format,
+          version: def.version,
         })
       },
     }
@@ -178,6 +184,7 @@ export function create(
       return serveImpl(name, commands, argv, {
         ...serveOptions,
         description: def.description,
+        format: def.format,
         version: def.version,
       })
     },
@@ -191,6 +198,7 @@ export declare namespace create {
   /** Options for creating a CLI. Provide `run` for a leaf CLI, omit it for a router. */
   type Options<
     args extends z.ZodObject<any> | undefined = undefined,
+    env extends z.ZodObject<any> | undefined = undefined,
     options extends z.ZodObject<any> | undefined = undefined,
     output extends z.ZodObject<any> | undefined = undefined,
   > = {
@@ -199,29 +207,35 @@ export declare namespace create {
       ? Partial<Record<keyof z.output<options>, string>>
       : Record<string, string> | undefined
     /** Zod schema for positional arguments. */
-    args?: args
+    args?: args | undefined
     /** A short description of what the CLI does. */
     description?: string | undefined
+    /** Zod schema for environment variables. Keys are the variable names (e.g. `NPM_TOKEN`). */
+    env?: env | undefined
     /** Usage examples for this command. */
     examples?: Example<args, options>[] | undefined
+    /** Default output format. Overridden by `--format` or `--json`. */
+    format?: Formatter.Format | undefined
     /** Zod schema for named options/flags. */
-    options?: options
+    options?: options | undefined
     /** Zod schema for the return value. */
-    output?: output
+    output?: output | undefined
     /** The root command handler. When provided, creates a leaf CLI with no subcommands. */
-    run?: (context: {
+    run?: ((context: {
       args: InferOutput<args>
+      /** Parsed environment variables. */
+      env: InferOutput<env>
       /** Return an error result with optional CTAs. */
       error: (options: {
         code: string
-        cta?: CtaBlock
+        cta?: CtaBlock | undefined
         message: string
-        retryable?: boolean
+        retryable?: boolean | undefined
       }) => never
       /** Return a success result with optional metadata (e.g. CTAs). */
-      ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
+      ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
       options: InferOutput<options>
-    }) => InferReturn<output> | Promise<InferReturn<output>>
+    }) => InferReturn<output> | Promise<InferReturn<output>>) | undefined
     /** The CLI version string. */
     version?: string | undefined
   }
@@ -230,6 +244,8 @@ export declare namespace create {
 export declare namespace serve {
   /** Options for `serve()`, primarily used for testing. */
   type Options = {
+    /** Override environment variable source. Defaults to `process.env`. */
+    env?: Record<string, string | undefined> | undefined
     /** Override exit handler. Defaults to `process.exit`. */
     exit?: ((code: number) => void) | undefined
     /** Override stdout writer. Defaults to `process.stdout.write`. */
@@ -252,7 +268,7 @@ async function serveImpl(
 
   const {
     verbose,
-    format,
+    format: formatFlag,
     formatExplicit,
     llms,
     help,
@@ -286,14 +302,14 @@ async function serveImpl(
       }
     }
 
-    if (!formatExplicit || format === 'md') {
+    if (!formatExplicit || formatFlag === 'md') {
       const groups = new Map<string, string>()
       const cmds = collectSkillCommands(scopedCommands, prefix, groups)
       const scopedName = prefix.length > 0 ? `${name} ${prefix.join(' ')}` : name
       writeln(Skill.generate(scopedName, cmds, groups))
       return
     }
-    writeln(Formatter.format(buildManifest(scopedCommands, prefix), format))
+    writeln(Formatter.format(buildManifest(scopedCommands, prefix), formatFlag))
     return
   }
 
@@ -331,8 +347,10 @@ async function serveImpl(
     } else {
       writeln(
         Help.formatCommand(`${name} ${resolved.path}`, {
+          alias: resolved.command.alias as Record<string, string> | undefined,
           description: resolved.command.description,
           args: resolved.command.args,
+          env: resolved.command.env,
           options: resolved.command.options,
           examples: formatExamples(resolved.command.examples),
         }),
@@ -353,10 +371,14 @@ async function serveImpl(
 
   const start = performance.now()
 
+  // Resolve effective format: explicit --format/--json → command default → CLI default → toon
+  const resolvedFormat = 'command' in resolved && resolved.command.format
+  const format = formatExplicit ? formatFlag : resolvedFormat || options.format || 'toon'
+
   function write(output: Output) {
     if (human) {
-      if (output.ok) return // handler owns stdout in TTY mode
-      writeln(formatHumanError(output.error))
+      if (output.ok) writeln(Formatter.format(output.data, format))
+      else writeln(formatHumanError(output.error))
       return
     }
     if (verbose) return writeln(Formatter.format(output, format))
@@ -365,9 +387,7 @@ async function serveImpl(
   }
 
   if ('error' in resolved) {
-    const helpCmd = resolved.path
-      ? `${name} ${resolved.path} --help`
-      : `${name} --help`
+    const helpCmd = resolved.path ? `${name} ${resolved.path} --help` : `${name} --help`
     const message = `'${resolved.error}' is not a command. See '${helpCmd}' for a list of available commands.`
     if (human) {
       writeln(formatHumanError({ code: 'COMMAND_NOT_FOUND', message }))
@@ -394,19 +414,28 @@ async function serveImpl(
       options: command.options,
     })
 
-    const okFn = (data: unknown, meta: { cta?: CtaBlock } = {}): never => {
+    const envSource = options.env ?? process.env
+    const env = command.env ? Parser.parseEnv(command.env, envSource) : {}
+
+    const okFn = (data: unknown, meta: { cta?: CtaBlock | undefined } = {}): never => {
       return { [sentinel]: 'ok', data, cta: meta.cta } as never
     }
     const errorFn = (opts: {
       code: string
       message: string
-      retryable?: boolean
-      cta?: CtaBlock
+      retryable?: boolean | undefined
+      cta?: CtaBlock | undefined
     }): never => {
       return { [sentinel]: 'error', ...opts } as never
     }
 
-    const result = await command.run({ args, options: parsedOptions, ok: okFn, error: errorFn })
+    const result = await command.run({
+      args,
+      env,
+      options: parsedOptions,
+      ok: okFn,
+      error: errorFn,
+    })
 
     if (isSentinel(result)) {
       const cta = formatCtaBlock(name, result.cta)
@@ -447,10 +476,15 @@ async function serveImpl(
       })
     }
   } catch (error) {
-    write({
+    const errorOutput: Output = {
       ok: false,
       error: {
-        code: error instanceof ClacError ? error.code : 'UNKNOWN',
+        code:
+          error instanceof ClacError
+            ? error.code
+            : error instanceof ValidationError
+              ? 'VALIDATION_ERROR'
+              : 'UNKNOWN',
         message: error instanceof Error ? error.message : String(error),
         ...(error instanceof ClacError ? { retryable: error.retryable } : undefined),
         ...(error instanceof ValidationError ? { fieldErrors: error.fieldErrors } : undefined),
@@ -459,9 +493,41 @@ async function serveImpl(
         command: path,
         duration: `${Math.round(performance.now() - start)}ms`,
       },
-    })
+    }
+
+    if (human && error instanceof ValidationError) {
+      writeln(formatHumanValidationError(name, path, command, error))
+      exit(1)
+      return
+    }
+
+    write(errorOutput)
     exit(1)
   }
+}
+
+/** @internal Formats a validation error for TTY with usage hint. */
+function formatHumanValidationError(
+  cli: string,
+  path: string,
+  command: CommandDefinition<any, any, any>,
+  error: ValidationError,
+): string {
+  const lines: string[] = []
+  for (const fe of error.fieldErrors) lines.push(`Error: missing required argument <${fe.path}>`)
+  lines.push('See below for usage.')
+  lines.push('')
+  lines.push(
+    Help.formatCommand(`${cli} ${path}`, {
+      alias: command.alias as Record<string, string> | undefined,
+      description: command.description,
+      args: command.args,
+      env: command.env,
+      options: command.options,
+      examples: formatExamples(command.examples),
+    }),
+  )
+  return lines.join('\n')
 }
 
 /** @internal Resolves a command from the tree by walking tokens until a leaf is found. */
@@ -479,8 +545,7 @@ function resolveCommand(
   | { error: string; path: string } {
   const [first, ...rest] = tokens
 
-  if (!first || !commands.has(first))
-    return { error: first ?? '(none)', path: '' }
+  if (!first || !commands.has(first)) return { error: first ?? '(none)', path: '' }
 
   let entry = commands.get(first)!
   const path = [first]
@@ -513,6 +578,8 @@ function resolveCommand(
 declare namespace serveImpl {
   type Options = serve.Options & {
     description?: string | undefined
+    /** CLI-level default output format. */
+    format?: Formatter.Format | undefined
     version?: string | undefined
   }
 }
@@ -671,9 +738,9 @@ function collectCommands(
   prefix: string[],
 ): {
   name: string
-  description?: string
-  schema?: Record<string, unknown>
-  examples?: { command: string; description?: string }[]
+  description?: string | undefined
+  schema?: Record<string, unknown> | undefined
+  examples?: { command: string; description?: string | undefined }[] | undefined
 }[] {
   const result: ReturnType<typeof collectCommands> = []
   for (const [name, entry] of commands) {
@@ -684,11 +751,12 @@ function collectCommands(
       const cmd: (typeof result)[number] = { name: path.join(' ') }
       if (entry.description) cmd.description = entry.description
 
-      const inputSchema = buildInputSchema(entry.args, entry.options)
+      const inputSchema = buildInputSchema(entry.args, entry.env, entry.options)
       const outputSchema = entry.output ? Schema.toJsonSchema(entry.output) : undefined
       if (inputSchema || outputSchema) {
         cmd.schema = {}
         if (inputSchema?.args) cmd.schema.args = inputSchema.args
+        if (inputSchema?.env) cmd.schema.env = inputSchema.env
         if (inputSchema?.options) cmd.schema.options = inputSchema.options
         if (outputSchema) cmd.schema.output = outputSchema
       }
@@ -723,6 +791,7 @@ function collectSkillCommands(
       const cmd: Skill.CommandInfo = { name: path.join(' ') }
       if (entry.description) cmd.description = entry.description
       if (entry.args) cmd.args = entry.args
+      if (entry.env) cmd.env = entry.env
       if (entry.options) cmd.options = entry.options
       if (entry.output) cmd.output = entry.output
       const examples = formatExamples(entry.examples)
@@ -755,14 +824,26 @@ export function formatExamples(
   })
 }
 
-/** @internal Builds separate args and options JSON Schemas. */
+/** @internal Builds separate args, env, and options JSON Schemas. */
 function buildInputSchema(
   args: z.ZodObject<any> | undefined,
+  env: z.ZodObject<any> | undefined,
   options: z.ZodObject<any> | undefined,
-): { args?: Record<string, unknown>; options?: Record<string, unknown> } | undefined {
-  if (!args && !options) return undefined
-  const result: { args?: Record<string, unknown>; options?: Record<string, unknown> } = {}
+):
+  | {
+      args?: Record<string, unknown> | undefined
+      env?: Record<string, unknown> | undefined
+      options?: Record<string, unknown> | undefined
+    }
+  | undefined {
+  if (!args && !env && !options) return undefined
+  const result: {
+    args?: Record<string, unknown> | undefined
+    env?: Record<string, unknown> | undefined
+    options?: Record<string, unknown> | undefined
+  } = {}
   if (args) result.args = Schema.toJsonSchema(args)
+  if (env) result.env = Schema.toJsonSchema(env)
   if (options) result.options = Schema.toJsonSchema(options)
   return result
 }
@@ -833,6 +914,7 @@ declare namespace Output {
 /** @internal Defines a command's schema, handler, and metadata. */
 type CommandDefinition<
   args extends z.ZodObject<any> | undefined = undefined,
+  env extends z.ZodObject<any> | undefined = undefined,
   options extends z.ZodObject<any> | undefined = undefined,
   output extends z.ZodObject<any> | undefined = undefined,
 > = {
@@ -841,27 +923,33 @@ type CommandDefinition<
     ? Partial<Record<keyof z.output<options>, string>>
     : Record<string, string> | undefined
   /** Zod schema for positional arguments. */
-  args?: args
+  args?: args | undefined
   /** A short description of what the command does. */
   description?: string | undefined
+  /** Zod schema for environment variables. Keys are the variable names (e.g. `NPM_TOKEN`). */
+  env?: env | undefined
   /** Usage examples for this command. */
   examples?: Example<args, options>[] | undefined
+  /** Default output format. Overridden by `--format` or `--json`. */
+  format?: Formatter.Format | undefined
   /** Zod schema for named options/flags. */
-  options?: options
+  options?: options | undefined
   /** Zod schema for the command's return value. */
-  output?: output
+  output?: output | undefined
   /** The command handler. */
   run(context: {
     args: InferOutput<args>
+    /** Parsed environment variables. */
+    env: InferOutput<env>
     /** Return an error result with optional CTAs. */
     error: (options: {
       code: string
-      cta?: CtaBlock
+      cta?: CtaBlock | undefined
       message: string
-      retryable?: boolean
+      retryable?: boolean | undefined
     }) => never
     /** Return a success result with optional metadata (e.g. CTAs). */
-    ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock }) => never
+    ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
     options: InferOutput<options>
   }): InferReturn<output> | Promise<InferReturn<output>>
 }
