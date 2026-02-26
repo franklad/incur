@@ -419,6 +419,7 @@ async function serveImpl(
     writeln(
       Help.formatRoot(name, {
         description: options.description,
+        version: options.version,
         commands: collectHelpCommands(commands),
       }),
     )
@@ -437,6 +438,7 @@ async function serveImpl(
       writeln(
         Help.formatRoot(helpName, {
           description: helpDesc,
+          version: helpName === name ? options.version : undefined,
           commands: collectHelpCommands(helpCmds),
         }),
       )
@@ -447,6 +449,7 @@ async function serveImpl(
         Help.formatCommand(commandName, {
           alias: resolved.command.alias as Record<string, string> | undefined,
           description: resolved.command.description,
+          version: resolved.path === name ? options.version : undefined,
           args: resolved.command.args,
           env: resolved.command.env,
           hint: resolved.command.hint,

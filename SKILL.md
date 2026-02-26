@@ -235,6 +235,46 @@ env: z.object({
 
 Environment variables are parsed from `process.env` and validated against the Zod schema.
 
+### Usage patterns
+
+Define alternative usage patterns to show in `--help` instead of the auto-generated synopsis:
+
+```ts
+Cli.create('curl.md', {
+  args: z.object({ url: z.string() }),
+  options: z.object({ objective: z.string().optional() }),
+  usage: [
+    { args: { url: true } },
+    { args: { url: true }, options: { objective: true } },
+    { prefix: 'cat file.txt |', suffix: '| head' },
+  ],
+  run({ args }) {
+    return { content: '...' }
+  },
+})
+```
+
+Renders in help as:
+
+```
+Usage: curl.md <url>
+       curl.md <url> --objective <objective>
+       cat file.txt | curl.md | head
+```
+
+Each usage entry supports:
+
+| Property  | Type                         | Description                                      |
+| --------- | ---------------------------- | ------------------------------------------------ |
+| `args`    | `Partial<Record<key, true>>` | Argument keys to include as `<key>` placeholders |
+| `options` | `Partial<Record<key, true>>` | Option keys to include as `--key <key>` flags    |
+| `prefix`  | `string`                     | Text prepended before the command (e.g. piping)  |
+| `suffix`  | `string`                     | Text appended after the command                  |
+
+Both `args` and `options` are strictly typed from the Zod schemas — only valid keys are allowed.
+
+Usage patterns also work on subcommands via `.command()`.
+
 ## Output
 
 Every command returns data. incur wraps it in a structured envelope and serializes to the requested format.

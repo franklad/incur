@@ -546,6 +546,7 @@ describe('help', () => {
     expect(exitCode).toBeUndefined()
     expect(output).toMatchInlineSnapshot(`
       "app — A comprehensive CLI application for testing.
+      v3.5.0
 
       Usage: app <command>
 
@@ -704,7 +705,7 @@ describe('help', () => {
   test('--help takes precedence over --version', async () => {
     const { output } = await serve(createApp(), ['--help', '--version'])
     expect(output).toContain('Usage: app <command>')
-    expect(output).not.toContain('3.5.0')
+    expect(output).toContain('v3.5.0')
   })
 })
 

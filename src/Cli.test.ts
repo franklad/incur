@@ -1113,6 +1113,7 @@ describe('help', () => {
     const { output } = await serve(cli, ['--help', '--version'])
     expect(output).toMatchInlineSnapshot(`
       "tool
+      v1.2.3
 
       Usage: tool <command>
 

@@ -2,11 +2,12 @@ import { z } from 'zod'
 
 /** Formats help text for a router CLI or command group. */
 export function formatRoot(name: string, options: formatRoot.Options = {}): string {
-  const { description, commands = [] } = options
+  const { description, version, commands = [] } = options
   const lines: string[] = []
 
   // Header
   lines.push(description ? `${name} \u2014 ${description}` : name)
+  if (version) lines.push(`v${version}`)
   lines.push('')
 
   // Synopsis
@@ -36,6 +37,8 @@ export declare namespace formatRoot {
     commands?: { name: string; description?: string | undefined }[] | undefined
     /** A short description of the CLI or group. */
     description?: string | undefined
+    /** CLI version string. */
+    version?: string | undefined
   }
 }
 
@@ -56,17 +59,20 @@ export declare namespace formatCommand {
     /** Zod schema for named options/flags. */
     options?: z.ZodObject<any> | undefined
     /** Alternative usage patterns. */
-    usage?: { args?: Record<string, true>; options?: Record<string, true>; prefix?: string; suffix?: string }[] | undefined
+    usage?: { args?: Partial<Record<string, true>> | undefined; options?: Partial<Record<string, true>> | undefined; prefix?: string | undefined; suffix?: string | undefined }[] | undefined
+    /** CLI version string. */
+    version?: string | undefined
   }
 }
 
 /** Formats help text for a leaf command. */
 export function formatCommand(name: string, options: formatCommand.Options = {}): string {
-  const { alias, description, args, env, hint, options: opts, examples } = options
+  const { alias, description, version, args, env, hint, options: opts, examples } = options
   const lines: string[] = []
 
   // Header
   lines.push(description ? `${name} \u2014 ${description}` : name)
+  if (version) lines.push(`v${version}`)
   lines.push('')
 
   // Synopsis
