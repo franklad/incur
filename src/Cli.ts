@@ -835,7 +835,8 @@ function formatCtaBlock(name: string, block: CtaBlock | undefined): FormattedCta
 /** @internal Formats a CTA by prefixing the CLI name. Handles string and object forms. */
 function formatCta(name: string, cta: Cta): FormattedCta {
   if (typeof cta === 'string') return { command: `${name} ${cta}` }
-  let cmd = `${name} ${cta.command}`
+  const prefix = cta.command === name || cta.command.startsWith(`${name} `) ? '' : `${name} `
+  let cmd = `${prefix}${cta.command}`
   if (cta.args)
     for (const [key, value] of Object.entries(cta.args))
       cmd += value === true ? ` <${key}>` : ` ${value}`
