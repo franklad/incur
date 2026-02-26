@@ -96,7 +96,7 @@ export declare namespace register {
 }
 
 /** @internal Detects the package specifier used to run this CLI (handles dlx/npx URL and version installs). */
-function detectPackageSpecifier(name: string): string {
+export function detectPackageSpecifier(name: string): string {
   const bin = process.argv[1]
   if (!bin) return name
 
