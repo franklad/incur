@@ -10,7 +10,7 @@ export type CommandInfo = {
   env?: z.ZodObject<any> | undefined
   hint?: string | undefined
   options?: z.ZodObject<any> | undefined
-  output?: z.ZodObject<any> | undefined
+  output?: z.ZodType | undefined
   examples?: { command: string; description?: string }[] | undefined
 }
 
@@ -169,6 +169,10 @@ function renderCommandBody(cli: string, cmd: CommandInfo, level = 1): string {
     const outputSchema = Schema.toJsonSchema(cmd.output)
     const table = schemaToTable(outputSchema)
     if (table) sections.push(`${sub} Output\n\n${table}`)
+    else {
+      const type = resolveTypeName(outputSchema)
+      sections.push(`${sub} Output\n\nType: \`${type}\``)
+    }
   }
 
   // Examples

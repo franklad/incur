@@ -21,7 +21,7 @@ export type Cli<commands extends CommandsMap = {}> = {
       const args extends z.ZodObject<any> | undefined = undefined,
       const env extends z.ZodObject<any> | undefined = undefined,
       const options extends z.ZodObject<any> | undefined = undefined,
-      const output extends z.ZodObject<any> | undefined = undefined,
+      const output extends z.ZodType | undefined = undefined,
     >(
       name: name,
       definition: CommandDefinition<args, env, options, output>,
@@ -105,7 +105,7 @@ export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
-  const output extends z.ZodObject<any> | undefined = undefined,
+  const output extends z.ZodType | undefined = undefined,
 >(
   name: string,
   definition: create.Options<args, env, opts, output> & { run: Function },
@@ -115,14 +115,14 @@ export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
-  const output extends z.ZodObject<any> | undefined = undefined,
+  const output extends z.ZodType | undefined = undefined,
 >(name: string, definition?: create.Options<args, env, opts, output>): Cli
 /** Creates a leaf CLI from a single options object (e.g. package.json). */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
-  const output extends z.ZodObject<any> | undefined = undefined,
+  const output extends z.ZodType | undefined = undefined,
 >(
   definition: create.Options<args, env, opts, output> & { name: string; run: Function },
 ): Root<args, opts>
@@ -131,7 +131,7 @@ export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
-  const output extends z.ZodObject<any> | undefined = undefined,
+  const output extends z.ZodType | undefined = undefined,
 >(definition: create.Options<args, env, opts, output> & { name: string }): Cli
 export function create(
   nameOrDefinition: string | (any & { name: string }),
@@ -205,7 +205,7 @@ export declare namespace create {
     args extends z.ZodObject<any> | undefined = undefined,
     env extends z.ZodObject<any> | undefined = undefined,
     options extends z.ZodObject<any> | undefined = undefined,
-    output extends z.ZodObject<any> | undefined = undefined,
+    output extends z.ZodType | undefined = undefined,
   > = {
     /** Map of option names to single-char aliases. */
     alias?: options extends z.ZodObject<any>
@@ -971,8 +971,8 @@ type InferOutput<schema extends z.ZodObject<any> | undefined> =
   schema extends z.ZodObject<any> ? z.output<schema> : {}
 
 /** @internal Inferred return type for a command handler. */
-type InferReturn<output extends z.ZodObject<any> | undefined> =
-  output extends z.ZodObject<any> ? z.output<output> : unknown
+type InferReturn<output extends z.ZodType | undefined> =
+  output extends z.ZodType ? z.output<output> : unknown
 
 /** @internal The output envelope written to stdout. */
 type Output = OneOf<
@@ -1021,7 +1021,7 @@ type CommandDefinition<
   args extends z.ZodObject<any> | undefined = undefined,
   env extends z.ZodObject<any> | undefined = undefined,
   options extends z.ZodObject<any> | undefined = undefined,
-  output extends z.ZodObject<any> | undefined = undefined,
+  output extends z.ZodType | undefined = undefined,
 > = {
   /** Map of option names to single-char aliases. */
   alias?: options extends z.ZodObject<any>
