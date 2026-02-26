@@ -130,6 +130,42 @@ test('concatenates multiple commands', () => {
   `)
 })
 
+describe('hash', () => {
+  test('returns consistent hash for same commands', () => {
+    const commands: Skill.CommandInfo[] = [
+      { name: 'ping', description: 'Health check' },
+      { name: 'greet', description: 'Say hello' },
+    ]
+    expect(Skill.hash(commands)).toBe(Skill.hash(commands))
+  })
+
+  test('changes when command is added', () => {
+    const a = Skill.hash([{ name: 'ping', description: 'Health check' }])
+    const b = Skill.hash([
+      { name: 'ping', description: 'Health check' },
+      { name: 'greet', description: 'Say hello' },
+    ])
+    expect(a).not.toBe(b)
+  })
+
+  test('changes when description changes', () => {
+    const a = Skill.hash([{ name: 'ping', description: 'Health check' }])
+    const b = Skill.hash([{ name: 'ping', description: 'Check health' }])
+    expect(a).not.toBe(b)
+  })
+
+  test('changes when schema changes', () => {
+    const a = Skill.hash([{ name: 'greet', args: z.object({ name: z.string() }) }])
+    const b = Skill.hash([{ name: 'greet', args: z.object({ name: z.string(), age: z.number() }) }])
+    expect(a).not.toBe(b)
+  })
+
+  test('returns 16-char hex string', () => {
+    const h = Skill.hash([{ name: 'ping' }])
+    expect(h).toMatch(/^[0-9a-f]{16}$/)
+  })
+})
+
 describe('split', () => {
   const commands: Skill.CommandInfo[] = [
     { name: 'auth login', description: 'Log in' },

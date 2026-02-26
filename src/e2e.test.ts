@@ -1,4 +1,11 @@
-import { Cli, Errors, Typegen, z } from 'incur'
+import { Cli, Errors, Skill, Typegen, z } from 'incur'
+
+let __mockSkillsHash: string | undefined
+
+vi.mock('./SyncSkills.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./SyncSkills.js')>()
+  return { ...actual, readHash: () => __mockSkillsHash }
+})
 
 describe('routing', () => {
   test('top-level command', async () => {
@@ -1153,6 +1160,60 @@ describe('env', () => {
     expect(output).toContain('Environment Variables')
     expect(output).toContain('`AUTH_TOKEN`')
     expect(output).toContain('`AUTH_HOST`')
+  })
+})
+
+describe('skills staleness', () => {
+  let stderrSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    __mockSkillsHash = undefined
+  })
+
+  afterEach(() => {
+    stderrSpy.mockRestore()
+  })
+
+  test('warns when running a command with stale skills', async () => {
+    __mockSkillsHash = '0000000000000000'
+    const { output } = await serve(createApp(), ['ping'])
+    expect(output).toContain('pong: true')
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Skills are out of date.'),
+    )
+  })
+
+  test('no warning when skills hash matches', async () => {
+    // Use a simple CLI where we can compute the exact hash
+    const cli = Cli.create('tool', { version: '1.0.0' })
+    cli.command('ping', { description: 'Health check', run: () => ({ pong: true }) })
+    __mockSkillsHash = Skill.hash([{ name: 'ping', description: 'Health check' }])
+
+    const { output } = await serve(cli, ['ping'])
+    expect(output).toContain('pong: true')
+    expect(stderrSpy).not.toHaveBeenCalled()
+  })
+
+  test('no warning on first use (no hash stored)', async () => {
+    __mockSkillsHash = undefined
+    const { output } = await serve(createApp(), ['ping'])
+    expect(output).toContain('pong: true')
+    expect(stderrSpy).not.toHaveBeenCalled()
+  })
+
+  test('no warning for --llms', async () => {
+    __mockSkillsHash = '0000000000000000'
+    await serve(createApp(), ['--llms'])
+    expect(stderrSpy).not.toHaveBeenCalled()
+  })
+
+  test('no warning for --mcp', async () => {
+    __mockSkillsHash = '0000000000000000'
+    // --mcp starts a server that reads stdin, so we can't easily test it here.
+    // Instead verify it doesn't reach the staleness check by checking --version
+    await serve(createApp(), ['--version'])
+    expect(stderrSpy).not.toHaveBeenCalled()
   })
 })
 

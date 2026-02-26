@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type { z } from 'zod'
 
 import * as Schema from './Schema.js'
@@ -188,6 +190,19 @@ function renderCommandBody(cli: string, cmd: CommandInfo, level = 1): string {
   if (cmd.hint) sections.push(`> ${cmd.hint}`)
 
   return sections.join('\n\n')
+}
+
+/** Computes a deterministic hash of command structure for staleness detection. */
+export function hash(commands: CommandInfo[]): string {
+  const data = commands.map((cmd) => ({
+    name: cmd.name,
+    description: cmd.description,
+    args: cmd.args ? Schema.toJsonSchema(cmd.args) : undefined,
+    env: cmd.env ? Schema.toJsonSchema(cmd.env) : undefined,
+    options: cmd.options ? Schema.toJsonSchema(cmd.options) : undefined,
+    output: cmd.output ? Schema.toJsonSchema(cmd.output) : undefined,
+  }))
+  return createHash('sha256').update(JSON.stringify(data)).digest('hex').slice(0, 16)
 }
 
 /** @internal Renders a JSON Schema object as a Markdown table. Returns `undefined` for non-object schemas. */

@@ -74,6 +74,10 @@ export async function sync(
       )
       .filter(Boolean)
 
+    // Write skills hash for staleness detection
+    const entries = collectEntries(commands, [])
+    writeHash(name, Skill.hash(entries))
+
     return { skills, paths }
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true })
@@ -162,6 +166,31 @@ function resolvePackageRoot(): string {
     dir = path.dirname(dir)
   }
   return process.cwd()
+}
+
+/** Returns the hash file path for a CLI. */
+function hashPath(name: string): string {
+  const dir =
+    process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share')
+  return path.join(dir, 'incur', `${name}.json`)
+}
+
+/** @internal Writes the skills hash for staleness detection. */
+function writeHash(name: string, hash: string) {
+  const file = hashPath(name)
+  const dir = path.dirname(file)
+  if (!fsSync.existsSync(dir)) fsSync.mkdirSync(dir, { recursive: true })
+  fsSync.writeFileSync(file, JSON.stringify({ hash, at: new Date().toISOString() }) + '\n')
+}
+
+/** Reads the stored skills hash for a CLI. Returns `undefined` if no hash exists. */
+export function readHash(name: string): string | undefined {
+  try {
+    const data = JSON.parse(fsSync.readFileSync(hashPath(name), 'utf-8'))
+    return data.hash
+  } catch {
+    return undefined
+  }
 }
 
 /** Promisified execFile with stderr in error message. */

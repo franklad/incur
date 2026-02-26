@@ -1,3 +1,7 @@
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { Cli, SyncSkills } from 'incur'
 
 let mockExecError: Error | null = null
@@ -9,8 +13,16 @@ vi.mock('node:child_process', () => ({
   },
 }))
 
+let savedXdg: string | undefined
+
 beforeEach(() => {
   mockExecError = null
+  savedXdg = process.env.XDG_DATA_HOME
+})
+
+afterEach(() => {
+  if (savedXdg === undefined) delete process.env.XDG_DATA_HOME
+  else process.env.XDG_DATA_HOME = savedXdg
 })
 
 test('generates skill files to temp dir and calls runner', async () => {
@@ -51,4 +63,31 @@ test('propagates runner errors', async () => {
   await expect(SyncSkills.sync('test', commands, { runner: 'npx' })).rejects.toThrow(
     'skills not found',
   )
+})
+
+test('writes hash after successful sync', async () => {
+  const tmp = join(tmpdir(), `clac-hash-test-${Date.now()}`)
+  mkdirSync(tmp, { recursive: true })
+  process.env.XDG_DATA_HOME = tmp
+
+  const cli = Cli.create('hash-test')
+  cli.command('ping', { description: 'Health check', run: () => ({}) })
+
+  const commands = Cli.toCommands.get(cli)!
+  await SyncSkills.sync('hash-test', commands, { runner: 'npx' })
+
+  const stored = SyncSkills.readHash('hash-test')
+  expect(stored).toMatch(/^[0-9a-f]{16}$/)
+
+  rmSync(tmp, { recursive: true, force: true })
+})
+
+test('readHash returns undefined when no hash exists', () => {
+  const tmp = join(tmpdir(), `clac-hash-test-${Date.now()}`)
+  mkdirSync(tmp, { recursive: true })
+  process.env.XDG_DATA_HOME = tmp
+
+  expect(SyncSkills.readHash('nonexistent')).toBeUndefined()
+
+  rmSync(tmp, { recursive: true, force: true })
 })

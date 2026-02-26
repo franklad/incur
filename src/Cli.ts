@@ -4,6 +4,7 @@ import type { FieldError } from './Errors.js'
 import { IncurError, ValidationError } from './Errors.js'
 import * as Formatter from './Formatter.js'
 import * as Help from './Help.js'
+import { detectRunner } from './internal/pm.js'
 import type { OneOf } from './internal/types.js'
 import * as Parser from './Parser.js'
 import type { Register } from './Register.js'
@@ -321,6 +322,24 @@ async function serveImpl(
 
   function writeln(s: string) {
     stdout(s.endsWith('\n') ? s : `${s}\n`)
+  }
+
+  // Skills staleness check (skip for built-in commands)
+  if (!llms && !help && !version) {
+    const isSkillsAdd = filtered[0] === 'skills' || (filtered[0] === name && filtered[1] === 'skills')
+    const isMcpAdd = filtered[0] === 'mcp' || (filtered[0] === name && filtered[1] === 'mcp')
+    if (!isSkillsAdd && !isMcpAdd) {
+      const stored = SyncSkills.readHash(name)
+      if (stored) {
+        const groups = new Map<string, string>()
+        const entries = collectSkillCommands(commands, [], groups)
+        if (Skill.hash(entries) !== stored) {
+          const runner = detectRunner()
+          const spec = SyncMcp.detectPackageSpecifier(name)
+          process.stderr.write(`⚠ Skills are out of date. Run '${runner} ${spec} skills add' to update.\n\n`)
+        }
+      }
+    }
   }
 
   if (llms) {

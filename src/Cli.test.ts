@@ -1,5 +1,12 @@
 import { Cli, Errors, z } from 'incur'
 
+let __mockSkillsHash: string | undefined
+
+vi.mock('./SyncSkills.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./SyncSkills.js')>()
+  return { ...actual, readHash: () => __mockSkillsHash }
+})
+
 async function serve(
   cli: { serve: Cli.Cli['serve'] },
   argv: string[],
@@ -1301,5 +1308,66 @@ describe('env', () => {
 
     await serve(cli, ['deploy'], { env: { DEBUG: 'true', PORT: '8080' } })
     expect(receivedEnv).toEqual({ DEBUG: true, PORT: 8080 })
+  })
+})
+
+describe('skills staleness', () => {
+  let stderrSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    __mockSkillsHash = undefined
+  })
+
+  afterEach(() => {
+    stderrSpy.mockRestore()
+  })
+
+  test('warns on stderr when skills are stale', async () => {
+    __mockSkillsHash = '0000000000000000'
+    const cli = Cli.create('test')
+    cli.command('ping', { description: 'Health check', run: () => ({ pong: true }) })
+
+    await serve(cli, ['ping'])
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Skills are out of date. Run 'pnpx test skills add' to update."),
+    )
+  })
+
+  test('does not warn when hash matches', async () => {
+    const { Skill } = await import('incur')
+    __mockSkillsHash = Skill.hash([{ name: 'ping', description: 'Health check' }])
+    const cli = Cli.create('test')
+    cli.command('ping', { description: 'Health check', run: () => ({ pong: true }) })
+
+    await serve(cli, ['ping'])
+    expect(stderrSpy).not.toHaveBeenCalled()
+  })
+
+  test('does not warn when no hash stored', async () => {
+    __mockSkillsHash = undefined
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+
+    await serve(cli, ['ping'])
+    expect(stderrSpy).not.toHaveBeenCalled()
+  })
+
+  test('does not warn for skills add', async () => {
+    __mockSkillsHash = '0000000000000000'
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+
+    await serve(cli, ['skills', 'add'])
+    expect(stderrSpy).not.toHaveBeenCalled()
+  })
+
+  test('does not warn for --help', async () => {
+    __mockSkillsHash = '0000000000000000'
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+
+    await serve(cli, ['--help'])
+    expect(stderrSpy).not.toHaveBeenCalled()
   })
 })
