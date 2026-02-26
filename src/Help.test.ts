@@ -25,10 +25,10 @@ describe('formatCommand', () => {
         --limit <number>  Max PRs to return (default: 30)
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope"
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope"
     `)
   })
 
@@ -42,10 +42,10 @@ describe('formatCommand', () => {
       Usage: tool ping
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope"
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope"
     `)
   })
 
@@ -66,10 +66,10 @@ describe('formatCommand', () => {
         title  Title
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope"
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope"
     `)
   })
 })
@@ -95,10 +95,10 @@ describe('formatRoot', () => {
         issue list  List issues
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope"
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope"
     `)
   })
 
@@ -115,10 +115,10 @@ describe('formatRoot', () => {
         ping  Health check
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope"
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope"
     `)
   })
 })

@@ -1,6 +1,5 @@
-import { PassThrough } from 'node:stream'
-
 import { Mcp, z } from 'incur'
+import { PassThrough } from 'node:stream'
 
 function createTestCommands() {
   const commands = new Map<string, any>()
@@ -47,6 +46,14 @@ function createTestCommands() {
     description: 'Always fails',
     run({ error }: any) {
       return error({ code: 'BOOM', message: 'it broke' })
+    },
+  })
+
+  commands.set('stream', {
+    description: 'Stream chunks',
+    async *run() {
+      yield { content: 'hello' }
+      yield { content: 'world' }
     },
   })
 
@@ -102,7 +109,7 @@ describe('Mcp', () => {
       { id: 2, method: 'tools/list', params: {} },
     ])
     const names = res.result.tools.map((t: any) => t.name).sort()
-    expect(names).toEqual(['echo', 'fail', 'greet_hello', 'ping'])
+    expect(names).toEqual(['echo', 'fail', 'greet_hello', 'ping', 'stream'])
 
     const echoTool = res.result.tools.find((t: any) => t.name === 'echo')
     expect(echoTool.description).toBe('Echo a message')
@@ -133,7 +140,11 @@ describe('Mcp', () => {
   test('tools/call with args and options', async () => {
     const [, res] = await mcpSession(createTestCommands(), [
       { id: 1, method: 'initialize', params: initParams },
-      { id: 2, method: 'tools/call', params: { name: 'echo', arguments: { message: 'hello', upper: true } } },
+      {
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'echo', arguments: { message: 'hello', upper: true } },
+      },
     ])
     expect(res.result.content).toEqual([{ type: 'text', text: '{"result":"HELLO"}' }])
   })
@@ -141,7 +152,11 @@ describe('Mcp', () => {
   test('tools/call with nested group command', async () => {
     const [, res] = await mcpSession(createTestCommands(), [
       { id: 1, method: 'initialize', params: initParams },
-      { id: 2, method: 'tools/call', params: { name: 'greet_hello', arguments: { name: 'world' } } },
+      {
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'greet_hello', arguments: { name: 'world' } },
+      },
     ])
     expect(res.result.content).toEqual([{ type: 'text', text: '{"greeting":"hello world"}' }])
   })
@@ -189,5 +204,51 @@ describe('Mcp', () => {
     ])
     // upper defaults to false, so message stays lowercase
     expect(res.result.content).toEqual([{ type: 'text', text: '{"result":"hi"}' }])
+  })
+
+  test('streaming command buffers chunks into array', async () => {
+    const [, res] = await mcpSession(createTestCommands(), [
+      { id: 1, method: 'initialize', params: initParams },
+      { id: 2, method: 'tools/call', params: { name: 'stream', arguments: {} } },
+    ])
+    expect(res.result.content).toEqual([
+      { type: 'text', text: '[{"content":"hello"},{"content":"world"}]' },
+    ])
+  })
+
+  test('streaming command sends progress notifications', async () => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    const chunks: any[] = []
+    output.on('data', (chunk) => chunks.push(JSON.parse(chunk.toString().trim())))
+
+    const done = Mcp.serve('test-cli', '1.0.0', createTestCommands(), { input, output })
+
+    // Initialize
+    input.write(
+      JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: initParams }) + '\n',
+    )
+    await new Promise((r) => setTimeout(r, 10))
+
+    // Call streaming tool with progressToken
+    input.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'stream', arguments: {}, _meta: { progressToken: 'tok-1' } },
+      }) + '\n',
+    )
+    await new Promise((r) => setTimeout(r, 50))
+    input.end()
+    await done
+
+    // Filter for progress notifications
+    const progress = chunks.filter((c) => c.method === 'notifications/progress')
+    expect(progress).toHaveLength(2)
+    expect(progress[0].params.message).toBe('{"content":"hello"}')
+    expect(progress[1].params.message).toBe('{"content":"world"}')
+    expect(progress[0].params.progress).toBe(1)
+    expect(progress[1].params.progress).toBe(2)
   })
 })

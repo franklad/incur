@@ -14,7 +14,10 @@ cli.command('query', {
   options: z.object({
     dryRun: z.boolean().optional().describe('Show what would be paid without executing'),
     method: z.string().optional().describe('Custom request method (GET, POST, PUT, DELETE, ...)'),
-    header: z.array(z.string()).optional().describe("Add custom header (e.g. 'Accept: text/plain')"),
+    header: z
+      .array(z.string())
+      .optional()
+      .describe("Add custom header (e.g. 'Accept: text/plain')"),
     data: z.array(z.string()).optional().describe('POST data (use @filename or @- for stdin)'),
     json: z.string().optional().describe('Send JSON data with Content-Type header'),
     include: z.boolean().optional().describe('Include HTTP response headers in output'),
@@ -23,7 +26,15 @@ cli.command('query', {
     noRedirect: z.boolean().optional().describe('Disable following redirects'),
     network: z.string().optional().describe('Restrict to a specific network'),
   }),
-  alias: { method: 'X', header: 'H', data: 'd', include: 'i', output: 'o', timeout: 'm', network: 'n' },
+  alias: {
+    method: 'X',
+    header: 'H',
+    data: 'd',
+    include: 'i',
+    output: 'o',
+    timeout: 'm',
+    network: 'n',
+  },
   examples: [
     { args: { url: 'https://api.example.com/data' }, description: 'Simple GET' },
     {
@@ -37,7 +48,7 @@ cli.command('query', {
       description: 'Preview payment without executing',
     },
   ],
-  run({ args, error }) {
+  run({ error }) {
     const loggedIn = true
     if (!loggedIn)
       return error({
@@ -46,20 +57,20 @@ cli.command('query', {
         retryable: true,
         cta: {
           description: 'To authenticate:',
-          commands: [
-            { command: 'login', description: 'Sign up or log in to your Tempo wallet' },
-          ],
+          commands: [{ command: 'login', description: 'Sign up or log in to your Tempo wallet' }],
         },
       })
     return {
       id: 'chatcmpl-abc123',
       object: 'chat.completion',
       model: 'gpt-4o-mini',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: 'Hello! How can I help you today?' },
-        finish_reason: 'stop',
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'Hello! How can I help you today?' },
+          finish_reason: 'stop',
+        },
+      ],
       usage: { prompt_tokens: 8, completion_tokens: 9, total_tokens: 17 },
     }
   },
@@ -68,15 +79,22 @@ cli.command('query', {
 cli.command('login', {
   description: 'Sign up or log in to your Tempo wallet',
   run({ ok }) {
-    return ok({ status: 'logged_in' }, {
-      cta: {
-        description: 'Next steps:',
-        commands: [
-          { command: 'whoami', description: 'Check your wallet address and balances' },
-          { command: 'query', args: { url: 'https://api.example.com/data' }, description: 'Make your first paid request' },
-        ],
+    return ok(
+      { status: 'logged_in' },
+      {
+        cta: {
+          description: 'Next steps:',
+          commands: [
+            { command: 'whoami', description: 'Check your wallet address and balances' },
+            {
+              command: 'query',
+              args: { url: 'https://api.example.com/data' },
+              description: 'Make your first paid request',
+            },
+          ],
+        },
       },
-    })
+    )
   },
 })
 
@@ -94,10 +112,12 @@ cli.command('whoami', {
   description: 'Show wallet address, balances, and access keys',
   output: z.object({
     address: z.string(),
-    balances: z.array(z.object({
-      network: z.string(),
-      amount: z.string(),
-    })),
+    balances: z.array(
+      z.object({
+        network: z.string(),
+        amount: z.string(),
+      }),
+    ),
   }),
   run() {
     return {
@@ -134,15 +154,18 @@ session.command('close', {
     closed: z.boolean().optional().describe('Finalize channels pending close'),
   }),
   run({ ok }) {
-    return ok({ closed: true }, {
-      cta: {
-        description: 'Suggested commands:',
-        commands: [
-          { command: 'session list', description: 'View remaining sessions' },
-          { command: 'whoami', description: 'Check updated balances' },
-        ],
+    return ok(
+      { closed: true },
+      {
+        cta: {
+          description: 'Suggested commands:',
+          commands: [
+            { command: 'session list', description: 'View remaining sessions' },
+            { command: 'whoami', description: 'Check updated balances' },
+          ],
+        },
       },
-    })
+    )
   },
 })
 

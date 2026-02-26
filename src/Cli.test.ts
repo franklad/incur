@@ -592,10 +592,10 @@ describe('subcommands', () => {
         list
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -988,12 +988,12 @@ describe('help', () => {
         skills add  Sync skill files to your agent
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --mcp                         Start as MCP stdio server
-        --verbose                     Show full output envelope
-        --version                     Show version
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --mcp                               Start as MCP stdio server
+        --verbose                           Show full output envelope
+        --version                           Show version
       "
     `)
   })
@@ -1020,12 +1020,12 @@ describe('help', () => {
         skills add  Sync skill files to your agent
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --mcp                         Start as MCP stdio server
-        --verbose                     Show full output envelope
-        --version                     Show version
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --mcp                               Start as MCP stdio server
+        --verbose                           Show full output envelope
+        --version                           Show version
       "
     `)
   })
@@ -1049,10 +1049,10 @@ describe('help', () => {
         name  Name
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -1078,10 +1078,10 @@ describe('help', () => {
         list  List PRs
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -1117,12 +1117,12 @@ describe('help', () => {
         skills add  Sync skill files to your agent
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --mcp                         Start as MCP stdio server
-        --verbose                     Show full output envelope
-        --version                     Show version
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --mcp                               Start as MCP stdio server
+        --verbose                           Show full output envelope
+        --version                           Show version
       "
     `)
   })
@@ -1144,10 +1144,10 @@ describe('help', () => {
       Run "tool status" to check deployment progress.
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -1238,10 +1238,10 @@ describe('env', () => {
         API_URL    API URL (default: https://api.example.com)
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })

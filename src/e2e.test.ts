@@ -528,6 +528,153 @@ describe('async', () => {
   })
 })
 
+describe('streaming', () => {
+  test('default streams toon per chunk (human)', async () => {
+    const { output } = await serve(createApp(), ['stream'])
+    expect(output).toMatchInlineSnapshot(`
+      "content: hello
+      content: world
+      "
+    `)
+  })
+
+  test('default streams toon per chunk (--verbose)', async () => {
+    const { output } = await serve(createApp(), ['stream', '--verbose'])
+    expect(output).toMatchInlineSnapshot(`
+      "content: hello
+      content: world
+      "
+    `)
+  })
+
+  test('--format json buffers all chunks', async () => {
+    const { output } = await serve(createApp(), ['stream', '--format', 'json'])
+    expect(json(output)).toMatchInlineSnapshot(`
+      [
+        {
+          "content": "hello",
+        },
+        {
+          "content": "world",
+        },
+      ]
+    `)
+  })
+
+  test('--format json --verbose buffers with envelope', async () => {
+    const { output } = await serve(createApp(), ['stream', '--verbose', '--format', 'json'])
+    expect(json(output)).toMatchInlineSnapshot(`
+      {
+        "data": [
+          {
+            "content": "hello",
+          },
+          {
+            "content": "world",
+          },
+        ],
+        "meta": {
+          "command": "stream",
+          "duration": "0ms",
+        },
+        "ok": true,
+      }
+    `)
+  })
+
+  test('--format jsonl explicit', async () => {
+    const { output } = await serve(createApp(), ['stream', '--format', 'jsonl'])
+    const lines = output
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+    expect(lines[0]).toEqual({ type: 'chunk', data: { content: 'hello' } })
+    expect(lines[1]).toEqual({ type: 'chunk', data: { content: 'world' } })
+    expect(lines[2].type).toBe('done')
+  })
+
+  test('ok() CTA in jsonl done record', async () => {
+    const { output } = await serve(createApp(), ['stream-ok', '--format', 'jsonl'])
+    const lines = output
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+    const done = lines.find((l: any) => l.type === 'done')
+    expect(done.meta.cta).toMatchInlineSnapshot(`
+      {
+        "commands": [
+          {
+            "command": "app ping",
+          },
+        ],
+        "description": "Suggested commands:",
+      }
+    `)
+  })
+
+  test('ok() CTA shows after toon stream', async () => {
+    const { output } = await serve(createApp(), ['stream-ok'])
+    expect(output).toContain('n: 1')
+    expect(output).toContain('n: 2')
+    expect(output).toContain('Suggested commands:')
+    expect(output).toContain('app ping')
+  })
+
+  test('error() mid-stream in jsonl', async () => {
+    const { output, exitCode } = await serve(createApp(), ['stream-error', '--format', 'jsonl'])
+    const lines = output
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+    expect(lines[0]).toEqual({ type: 'chunk', data: { n: 1 } })
+    expect(lines[1]).toMatchInlineSnapshot(`
+      {
+        "error": {
+          "code": "STREAM_FAIL",
+          "message": "broke mid-stream",
+        },
+        "ok": false,
+        "type": "error",
+      }
+    `)
+    expect(exitCode).toBe(1)
+  })
+
+  test('error() mid-stream in toon', async () => {
+    const { output, exitCode } = await serve(createApp(), ['stream-error'])
+    expect(output).toContain('n: 1')
+    expect(output).toContain('Error (STREAM_FAIL): broke mid-stream')
+    expect(exitCode).toBe(1)
+  })
+
+  test('thrown error mid-stream in jsonl', async () => {
+    const { output, exitCode } = await serve(createApp(), ['stream-throw', '--format', 'jsonl'])
+    const lines = output
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+    expect(lines[0]).toEqual({ type: 'chunk', data: { n: 1 } })
+    expect(lines[1]).toMatchInlineSnapshot(`
+      {
+        "error": {
+          "code": "UNKNOWN",
+          "message": "stream kaboom",
+        },
+        "ok": false,
+        "type": "error",
+      }
+    `)
+    expect(exitCode).toBe(1)
+  })
+
+  test('thrown error mid-stream in toon', async () => {
+    const { output, exitCode } = await serve(createApp(), ['stream-throw'])
+    expect(output).toContain('n: 1')
+    expect(output).toContain('Error: stream kaboom')
+    expect(exitCode).toBe(1)
+  })
+})
+
 describe('help', () => {
   test('root help (no args)', async () => {
     const { output, exitCode } = await serve(createApp(), [])
@@ -547,6 +694,10 @@ describe('help', () => {
         ping           Health check
         project        Manage projects
         slow           Async command
+        stream         Stream chunks
+        stream-error   Stream with mid-stream error
+        stream-ok      Stream with ok() return
+        stream-throw   Stream that throws
         validate-fail  Fails validation
 
       Built-in Commands:
@@ -554,12 +705,12 @@ describe('help', () => {
         skills add  Sync skill files to your agent
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --mcp                         Start as MCP stdio server
-        --verbose                     Show full output envelope
-        --version                     Show version
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --mcp                               Start as MCP stdio server
+        --verbose                           Show full output envelope
+        --version                           Show version
       "
     `)
   })
@@ -583,10 +734,10 @@ describe('help', () => {
         status  Show authentication status
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -605,10 +756,10 @@ describe('help', () => {
         status    Check deployment status
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -626,10 +777,10 @@ describe('help', () => {
         --archived <boolean>  Include archived (default: false)
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -653,10 +804,10 @@ describe('help', () => {
         $ app project deploy create production --branch release --dryRun true  Dry run a production deploy
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -707,6 +858,10 @@ describe('--llms', () => {
         "project get",
         "project list",
         "slow",
+        "stream",
+        "stream-error",
+        "stream-ok",
+        "stream-throw",
         "validate-fail",
       ]
     `)
@@ -901,6 +1056,10 @@ describe('typegen', () => {
             'project get': { args: { id: string }; options: {} }
             'project list': { args: {}; options: { limit: number; sort: "name" | "created" | "updated"; archived: boolean } }
             'slow': { args: {}; options: {} }
+            'stream': { args: {}; options: {} }
+            'stream-error': { args: {}; options: {} }
+            'stream-ok': { args: {}; options: {} }
+            'stream-throw': { args: {}; options: {} }
             'validate-fail': { args: { email: string; age: number }; options: {} }
           }
         }
@@ -1129,10 +1288,10 @@ describe('env', () => {
         AUTH_HOST   Auth server hostname (default: api.example.com)
 
       Global Options:
-        --format <toon|json|yaml|md>  Output format
-        --help                        Show help
-        --llms                        Print LLM-readable manifest
-        --verbose                     Show full output envelope
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope
       "
     `)
   })
@@ -1179,9 +1338,7 @@ describe('skills staleness', () => {
     __mockSkillsHash = '0000000000000000'
     const { output } = await serve(createApp(), ['ping'])
     expect(output).toContain('pong: true')
-    expect(stderrSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Skills are out of date.'),
-    )
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Skills are out of date.'))
   })
 
   test('no warning when skills hash matches', async () => {
@@ -1509,6 +1666,39 @@ function createApp() {
     }),
     run({ args }) {
       return args
+    },
+  })
+
+  cli.command('stream', {
+    description: 'Stream chunks',
+    async *run() {
+      yield { content: 'hello' }
+      yield { content: 'world' }
+    },
+  })
+
+  cli.command('stream-ok', {
+    description: 'Stream with ok() return',
+    async *run({ ok }) {
+      yield { n: 1 }
+      yield { n: 2 }
+      return ok(undefined as any, { cta: { commands: ['ping'] } })
+    },
+  })
+
+  cli.command('stream-error', {
+    description: 'Stream with mid-stream error',
+    async *run({ error }) {
+      yield { n: 1 }
+      return error({ code: 'STREAM_FAIL', message: 'broke mid-stream' })
+    },
+  })
+
+  cli.command('stream-throw', {
+    description: 'Stream that throws',
+    async *run() {
+      yield { n: 1 }
+      throw new Error('stream kaboom')
     },
   })
 

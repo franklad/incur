@@ -1,7 +1,6 @@
-import type { Readable, Writable } from 'node:stream'
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import type { Readable, Writable } from 'node:stream'
 
 import * as Schema from './Schema.js'
 
@@ -16,8 +15,8 @@ export async function serve(
 
   for (const tool of collectTools(commands, [])) {
     const mergedShape: Record<string, any> = {
-      ...(tool.command.args?.shape ?? {}),
-      ...(tool.command.options?.shape ?? {}),
+      ...tool.command.args?.shape,
+      ...tool.command.options?.shape,
     }
     const hasInput = Object.keys(mergedShape).length > 0
 
@@ -30,7 +29,8 @@ export async function serve(
       async (...callArgs: any[]) => {
         // registerTool passes (args, extra) when inputSchema is set, (extra) when not
         const params = hasInput ? (callArgs[0] as Record<string, unknown>) : {}
-        return callTool(tool, params)
+        const extra = hasInput ? callArgs[1] : callArgs[0]
+        return callTool(tool, params, extra)
       },
     )
   }
@@ -55,6 +55,10 @@ export declare namespace serve {
 async function callTool(
   tool: ToolEntry,
   params: Record<string, unknown>,
+  extra?: {
+    _meta?: { progressToken?: string | number }
+    sendNotification?: (n: any) => Promise<void>
+  },
 ): Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }> {
   try {
     const { args, options } = splitParams(params, tool.command)
@@ -67,7 +71,7 @@ async function callTool(
     const errorFn = (opts: { code: string; message: string }): never =>
       ({ [sentinel]: 'error', ...opts }) as never
 
-    const raw = await tool.command.run({
+    const raw = tool.command.run({
       args: parsedArgs,
       env: parsedEnv,
       options: parsedOptions,
@@ -75,20 +79,59 @@ async function callTool(
       error: errorFn,
     })
 
-    if (typeof raw === 'object' && raw !== null && sentinel in raw) {
-      const tagged = raw as any
+    // Streaming: send progress notifications per chunk, then return buffered result
+    if (isAsyncGenerator(raw)) {
+      const chunks: unknown[] = []
+      const progressToken = extra?._meta?.progressToken
+      let i = 0
+      for await (const chunk of raw) {
+        if (typeof chunk === 'object' && chunk !== null && sentinel in chunk) {
+          const tagged = chunk as any
+          if (tagged[sentinel] === 'error')
+            return {
+              content: [{ type: 'text', text: tagged.message ?? 'Command failed' }],
+              isError: true,
+            }
+        }
+        chunks.push(chunk)
+        if (progressToken !== undefined && extra?.sendNotification)
+          await extra.sendNotification({
+            method: 'notifications/progress' as const,
+            params: { progressToken, progress: ++i, message: JSON.stringify(chunk) },
+          })
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(chunks) }] }
+    }
+
+    const awaited = await raw
+
+    if (typeof awaited === 'object' && awaited !== null && sentinel in awaited) {
+      const tagged = awaited as any
       if (tagged[sentinel] === 'error')
-        return { content: [{ type: 'text', text: tagged.message ?? 'Command failed' }], isError: true }
+        return {
+          content: [{ type: 'text', text: tagged.message ?? 'Command failed' }],
+          isError: true,
+        }
       return { content: [{ type: 'text', text: JSON.stringify(tagged.data) }] }
     }
 
-    return { content: [{ type: 'text', text: JSON.stringify(raw) }] }
+    return { content: [{ type: 'text', text: JSON.stringify(awaited) }] }
   } catch (err) {
     return {
       content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }],
       isError: true,
     }
   }
+}
+
+/** @internal Type guard for async generators. */
+function isAsyncGenerator(value: unknown): value is AsyncGenerator<unknown, unknown, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Symbol.asyncIterator in value &&
+    typeof (value as any).next === 'function'
+  )
 }
 
 /** @internal A resolved tool entry from the command tree. */
@@ -104,8 +147,7 @@ function collectTools(commands: Map<string, any>, prefix: string[]): ToolEntry[]
   const result: ToolEntry[] = []
   for (const [name, entry] of commands) {
     const path = [...prefix, name]
-    if ('_group' in entry && entry._group)
-      result.push(...collectTools(entry.commands, path))
+    if ('_group' in entry && entry._group) result.push(...collectTools(entry.commands, path))
     else {
       result.push({
         name: path.join('_'),

@@ -63,7 +63,14 @@ export declare namespace formatCommand {
     /** Show root-level built-in commands and flags. */
     root?: boolean | undefined
     /** Alternative usage patterns. */
-    usage?: { args?: Partial<Record<string, true>> | undefined; options?: Partial<Record<string, true>> | undefined; prefix?: string | undefined; suffix?: string | undefined }[] | undefined
+    usage?:
+      | {
+          args?: Partial<Record<string, true>> | undefined
+          options?: Partial<Record<string, true>> | undefined
+          prefix?: string | undefined
+          suffix?: string | undefined
+        }[]
+      | undefined
     /** CLI version string. */
     version?: string | undefined
   }
@@ -71,7 +78,17 @@ export declare namespace formatCommand {
 
 /** Formats help text for a leaf command. */
 export function formatCommand(name: string, options: formatCommand.Options = {}): string {
-  const { alias, description, version, args, env, hint, root = false, options: opts, examples } = options
+  const {
+    alias,
+    description,
+    version,
+    args,
+    env,
+    hint,
+    root = false,
+    options: opts,
+    examples,
+  } = options
   const lines: string[] = []
 
   // Header
@@ -267,7 +284,7 @@ function globalOptionsLines(root = false): string[] {
   }
 
   const flags = [
-    { flag: '--format <toon|json|yaml|md>', desc: 'Output format' },
+    { flag: '--format <toon|json|yaml|md|jsonl>', desc: 'Output format' },
     { flag: '--help', desc: 'Show help' },
     { flag: '--llms', desc: 'Print LLM-readable manifest' },
     ...(root ? [{ flag: '--mcp', desc: 'Start as MCP stdio server' }] : []),

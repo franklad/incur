@@ -1,8 +1,7 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { Cli, SyncSkills } from 'incur'
+import { mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import { Cli, SyncSkills } from 'incur'
 
 let mockExecError: Error | null = null
 

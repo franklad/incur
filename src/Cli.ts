@@ -6,10 +6,10 @@ import * as Formatter from './Formatter.js'
 import * as Help from './Help.js'
 import { detectRunner } from './internal/pm.js'
 import type { OneOf } from './internal/types.js'
+import * as Mcp from './Mcp.js'
 import * as Parser from './Parser.js'
 import type { Register } from './Register.js'
 import * as Schema from './Schema.js'
-import * as Mcp from './Mcp.js'
 import * as Skill from './Skill.js'
 import * as SyncMcp from './SyncMcp.js'
 import * as SyncSkills from './SyncSkills.js'
@@ -248,7 +248,10 @@ export declare namespace create {
           /** Return a success result with optional metadata (e.g. CTAs). */
           ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
           options: InferOutput<options>
-        }) => InferReturn<output> | Promise<InferReturn<output>>)
+        }) =>
+          | InferReturn<output>
+          | Promise<InferReturn<output>>
+          | AsyncGenerator<InferReturn<output>, unknown, unknown>)
       | undefined
     /** Options for the built-in `mcp add` command. */
     mcp?:
@@ -326,7 +329,8 @@ async function serveImpl(
 
   // Skills staleness check (skip for built-in commands)
   if (!llms && !help && !version) {
-    const isSkillsAdd = filtered[0] === 'skills' || (filtered[0] === name && filtered[1] === 'skills')
+    const isSkillsAdd =
+      filtered[0] === 'skills' || (filtered[0] === name && filtered[1] === 'skills')
     const isMcpAdd = filtered[0] === 'mcp' || (filtered[0] === name && filtered[1] === 'mcp')
     if (!isSkillsAdd && !isMcpAdd) {
       const stored = SyncSkills.readHash(name)
@@ -336,7 +340,9 @@ async function serveImpl(
         if (Skill.hash(entries) !== stored) {
           const runner = detectRunner()
           const spec = SyncMcp.detectPackageSpecifier(name)
-          process.stderr.write(`⚠ Skills are out of date. Run '${runner} ${spec} skills add' to update.\n\n`)
+          process.stderr.write(
+            `⚠ Skills are out of date. Run '${runner} ${spec} skills add' to update.\n\n`,
+          )
         }
       }
     }
@@ -440,8 +446,7 @@ async function serveImpl(
   }
 
   // mcp add: register CLI as MCP server via `npx add-mcp`
-  const mcpIdx =
-    filtered[0] === 'mcp' ? 0 : filtered[0] === name && filtered[1] === 'mcp' ? 1 : -1
+  const mcpIdx = filtered[0] === 'mcp' ? 0 : filtered[0] === name && filtered[1] === 'mcp' ? 1 : -1
   if (mcpIdx !== -1 && filtered[mcpIdx] === 'mcp' && filtered[mcpIdx + 1] === 'add') {
     if (help) {
       writeln(
@@ -480,8 +485,7 @@ async function serveImpl(
         stdout('\r\x1b[K')
         const lines: string[] = []
         lines.push(`✓ Registered ${name} as MCP server`)
-        if (result.agents.length > 0)
-          lines.push(`  Agents: ${result.agents.join(', ')}`)
+        if (result.agents.length > 0) lines.push(`  Agents: ${result.agents.join(', ')}`)
         lines.push('')
         lines.push(`Agents can now use ${name} tools.`)
         const suggestions = options.sync?.suggestions
@@ -643,7 +647,7 @@ async function serveImpl(
       return { [sentinel]: 'error', ...opts } as never
     }
 
-    const result = await command.run({
+    const result = command.run({
       args,
       env,
       options: parsedOptions,
@@ -651,12 +655,31 @@ async function serveImpl(
       error: errorFn,
     })
 
-    if (isSentinel(result)) {
-      const cta = formatCtaBlock(name, result.cta)
-      if (result[sentinel] === 'ok') {
+    // Streaming path — async generator
+    if (isAsyncGenerator(result)) {
+      await handleStreaming(result, {
+        name,
+        path,
+        start,
+        format,
+        formatExplicit,
+        human,
+        verbose,
+        write,
+        writeln,
+        exit,
+      })
+      return
+    }
+
+    const awaited = await result
+
+    if (isSentinel(awaited)) {
+      const cta = formatCtaBlock(name, awaited.cta)
+      if (awaited[sentinel] === 'ok') {
         write({
           ok: true,
-          data: result.data,
+          data: awaited.data,
           meta: {
             command: path,
             duration: `${Math.round(performance.now() - start)}ms`,
@@ -667,9 +690,9 @@ async function serveImpl(
         write({
           ok: false,
           error: {
-            code: result.code,
-            message: result.message,
-            ...(result.retryable !== undefined ? { retryable: result.retryable } : undefined),
+            code: awaited.code,
+            message: awaited.message,
+            ...(awaited.retryable !== undefined ? { retryable: awaited.retryable } : undefined),
           },
           meta: {
             command: path,
@@ -682,7 +705,7 @@ async function serveImpl(
     } else {
       write({
         ok: true,
-        data: result,
+        data: awaited,
         meta: {
           command: path,
           duration: `${Math.round(performance.now() - start)}ms`,
@@ -941,6 +964,214 @@ function isSentinel(value: unknown): value is OkResult | ErrorResult {
   return typeof value === 'object' && value !== null && sentinel in value
 }
 
+/** @internal Type guard for async generators returned by streaming `run` handlers. */
+function isAsyncGenerator(value: unknown): value is AsyncGenerator<unknown, unknown, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Symbol.asyncIterator in value &&
+    typeof (value as any).next === 'function'
+  )
+}
+
+/** @internal Handles streaming output from an async generator `run` handler. */
+async function handleStreaming(
+  generator: AsyncGenerator<unknown, unknown, unknown>,
+  ctx: {
+    name: string
+    path: string
+    start: number
+    format: Formatter.Format
+    formatExplicit: boolean
+    human: boolean
+    verbose: boolean
+    write: (output: Output) => void
+    writeln: (s: string) => void
+    exit: (code: number) => void
+  },
+) {
+  // Incremental: human, no explicit format (default toon), or explicit jsonl
+  // Buffered: explicit json/yaml/toon/md
+  const useJsonl = !ctx.human && ctx.formatExplicit && ctx.format === 'jsonl'
+  const incremental = ctx.human || useJsonl || !ctx.formatExplicit
+
+  if (incremental) {
+    // Incremental output: write each chunk as it arrives
+    try {
+      let returnValue: unknown
+      while (true) {
+        const { value, done } = await generator.next()
+        if (done) {
+          returnValue = value
+          break
+        }
+        if (isSentinel(value)) {
+          const tagged = value as any
+          if (tagged[sentinel] === 'error') {
+            if (useJsonl)
+              ctx.writeln(
+                JSON.stringify({
+                  type: 'error',
+                  ok: false,
+                  error: {
+                    code: tagged.code,
+                    message: tagged.message,
+                    ...(tagged.retryable !== undefined
+                      ? { retryable: tagged.retryable }
+                      : undefined),
+                  },
+                }),
+              )
+            else ctx.writeln(formatHumanError({ code: tagged.code, message: tagged.message }))
+            ctx.exit(1)
+            return
+          }
+        }
+        if (useJsonl) ctx.writeln(JSON.stringify({ type: 'chunk', data: value }))
+        else ctx.writeln(Formatter.format(value, 'toon'))
+      }
+
+      // Handle return value — error() or ok() sentinel
+      if (isSentinel(returnValue) && returnValue[sentinel] === 'error') {
+        const err = returnValue as ErrorResult
+        if (useJsonl)
+          ctx.writeln(
+            JSON.stringify({
+              type: 'error',
+              ok: false,
+              error: {
+                code: err.code,
+                message: err.message,
+                ...(err.retryable !== undefined ? { retryable: err.retryable } : undefined),
+              },
+            }),
+          )
+        else ctx.writeln(formatHumanError({ code: err.code, message: err.message }))
+        ctx.exit(1)
+        return
+      }
+
+      const cta =
+        isSentinel(returnValue) && returnValue[sentinel] === 'ok'
+          ? formatCtaBlock(ctx.name, (returnValue as OkResult).cta)
+          : undefined
+
+      if (useJsonl)
+        ctx.writeln(
+          JSON.stringify({
+            type: 'done',
+            ok: true,
+            meta: {
+              command: ctx.path,
+              duration: `${Math.round(performance.now() - ctx.start)}ms`,
+              ...(cta ? { cta } : undefined),
+            },
+          }),
+        )
+      else if (cta) ctx.writeln(formatHumanCta(cta))
+    } catch (error) {
+      if (useJsonl)
+        ctx.writeln(
+          JSON.stringify({
+            type: 'error',
+            ok: false,
+            error: {
+              code: error instanceof IncurError ? error.code : 'UNKNOWN',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          }),
+        )
+      else
+        ctx.writeln(
+          formatHumanError({
+            code: 'UNKNOWN',
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        )
+      ctx.exit(1)
+    }
+  } else {
+    // Buffered output: collect all chunks, write as single value
+    const chunks: unknown[] = []
+    try {
+      let returnValue: unknown
+      while (true) {
+        const { value, done } = await generator.next()
+        if (done) {
+          returnValue = value
+          break
+        }
+        if (isSentinel(value)) {
+          const tagged = value as any
+          if (tagged[sentinel] === 'error') {
+            ctx.write({
+              ok: false,
+              error: {
+                code: tagged.code,
+                message: tagged.message,
+                ...(tagged.retryable !== undefined ? { retryable: tagged.retryable } : undefined),
+              },
+              meta: {
+                command: ctx.path,
+                duration: `${Math.round(performance.now() - ctx.start)}ms`,
+              },
+            })
+            ctx.exit(1)
+            return
+          }
+        }
+        chunks.push(value)
+      }
+
+      if (isSentinel(returnValue) && returnValue[sentinel] === 'error') {
+        const err = returnValue as ErrorResult
+        ctx.write({
+          ok: false,
+          error: {
+            code: err.code,
+            message: err.message,
+            ...(err.retryable !== undefined ? { retryable: err.retryable } : undefined),
+          },
+          meta: {
+            command: ctx.path,
+            duration: `${Math.round(performance.now() - ctx.start)}ms`,
+          },
+        })
+        ctx.exit(1)
+        return
+      }
+
+      const cta =
+        isSentinel(returnValue) && returnValue[sentinel] === 'ok'
+          ? formatCtaBlock(ctx.name, (returnValue as OkResult).cta)
+          : undefined
+
+      ctx.write({
+        ok: true,
+        data: chunks,
+        meta: {
+          command: ctx.path,
+          duration: `${Math.round(performance.now() - ctx.start)}ms`,
+          ...(cta ? { cta } : undefined),
+        },
+      })
+    } catch (error) {
+      ctx.write({
+        ok: false,
+        error: {
+          code: error instanceof IncurError ? error.code : 'UNKNOWN',
+          message: error instanceof Error ? error.message : String(error),
+        },
+        meta: {
+          command: ctx.path,
+          duration: `${Math.round(performance.now() - ctx.start)}ms`,
+        },
+      })
+      ctx.exit(1)
+    }
+  }
+}
+
 /** @internal Formats a CTA block into the output envelope shape. */
 function formatCtaBlock(name: string, block: CtaBlock | undefined): FormattedCtaBlock | undefined {
   if (!block || block.commands.length === 0) return undefined
@@ -1126,8 +1357,9 @@ type InferOutput<schema extends z.ZodObject<any> | undefined> =
   schema extends z.ZodObject<any> ? z.output<schema> : {}
 
 /** @internal Inferred return type for a command handler. */
-type InferReturn<output extends z.ZodType | undefined> =
-  output extends z.ZodType ? z.output<output> : unknown
+type InferReturn<output extends z.ZodType | undefined> = output extends z.ZodType
+  ? z.output<output>
+  : unknown
 
 /** @internal The output envelope written to stdout. */
 type Output = OneOf<
@@ -1200,7 +1432,7 @@ type CommandDefinition<
   output?: output | undefined
   /** Alternative usage patterns shown in help output. */
   usage?: Usage<args, options>[] | undefined
-  /** The command handler. */
+  /** The command handler. Return a value for single-return, or use `async *run` to stream chunks. */
   run(context: {
     args: InferOutput<args>
     /** Parsed environment variables. */
@@ -1215,7 +1447,10 @@ type CommandDefinition<
     /** Return a success result with optional metadata (e.g. CTAs). */
     ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
     options: InferOutput<options>
-  }): InferReturn<output> | Promise<InferReturn<output>>
+  }):
+    | InferReturn<output>
+    | Promise<InferReturn<output>>
+    | AsyncGenerator<InferReturn<output>, unknown, unknown>
 }
 
 /** @internal A formatted CTA block as it appears in the output envelope. */

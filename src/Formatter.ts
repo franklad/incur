@@ -2,7 +2,7 @@ import { encode } from '@toon-format/toon'
 import { stringify as yamlStringify } from 'yaml'
 
 /** Supported output formats. */
-export type Format = 'toon' | 'json' | 'yaml' | 'md'
+export type Format = 'toon' | 'json' | 'yaml' | 'md' | 'jsonl'
 
 /** Serializes a value to the specified format. Defaults to TOON. */
 export function format(value: unknown, fmt: Format = 'toon'): string {
