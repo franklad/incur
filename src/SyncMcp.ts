@@ -6,7 +6,10 @@ import { dirname, join } from 'node:path'
 import { detectRunner } from './internal/pm.js'
 
 /** Registers the CLI as an MCP server via `npx add-mcp` and direct config writes for unsupported agents. */
-export async function register(name: string, options: register.Options = {}): Promise<register.Result> {
+export async function register(
+  name: string,
+  options: register.Options = {},
+): Promise<register.Result> {
   const runner = detectRunner()
   const command = options.command ?? `${runner} ${detectPackageSpecifier(name)} --mcp`
   const targetAgents = options.agents ?? []

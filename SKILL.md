@@ -1,12 +1,12 @@
 ---
-name: build-clis
-description: Building CLI frameworks for agents and humans.
+name: incur
+description: incur is a TypeScript framework for building CLIs that work for both AI agents and humans. Use when creating new CLIs.
 command: incur
 ---
 
 # incur
 
-TypeScript framework for building CLIs for agents and human consumption. Strictly typed schemas for arguments and options, structured output envelopes, auto-generated skill files, and agent discovery via `--llms`.
+TypeScript framework for building CLIs for agents and human consumption. Strictly typed schemas for arguments and options, structured output envelopes, auto-generated skill files, and agent discovery via Skills, MCP, and `--llms`.
 
 ## Install
 
@@ -417,12 +417,11 @@ This registers the CLI with your agent's MCP config. Works with Claude Code, Cur
 
 Options:
 
-| Flag                   | Description                                              |
-| ---------------------- | -------------------------------------------------------- |
-| `-c`, `--command`      | Override the command agents will run to start the server  |
-| `--agent <agent>`      | Target a specific agent (e.g. `claude-code`, `cursor`)   |
-| `--no-global`          | Install to project instead of globally                   |
-
+| Flag              | Description                                              |
+| ----------------- | -------------------------------------------------------- |
+| `-c`, `--command` | Override the command agents will run to start the server |
+| `--agent <agent>` | Target a specific agent (e.g. `claude-code`, `cursor`)   |
+| `--no-global`     | Install to project instead of globally                   |
 
 #### `--mcp` flag
 
@@ -514,15 +513,15 @@ Use `--llms --format json` for JSON schema manifest:
 
 ## Built-in Flags
 
-| Flag                 | Description                                  |
-| -------------------- | -------------------------------------------- |
-| `--help`, `-h`       | Show help for the CLI or a specific command  |
-| `--version`          | Print CLI version                            |
-| `--llms`             | Output agent-readable command manifest       |
-| `--mcp`              | Start as an MCP stdio server                 |
-| `--json`             | Shorthand for `--format json`                |
-| `--format <fmt>`     | Output format: `toon`, `json`, `yaml`, `md`  |
-| `--verbose`          | Include full envelope (`ok`, `data`, `meta`) |
+| Flag             | Description                                  |
+| ---------------- | -------------------------------------------- |
+| `--help`, `-h`   | Show help for the CLI or a specific command  |
+| `--version`      | Print CLI version                            |
+| `--llms`         | Output agent-readable command manifest       |
+| `--mcp`          | Start as an MCP stdio server                 |
+| `--json`         | Shorthand for `--format json`                |
+| `--format <fmt>` | Output format: `toon`, `json`, `yaml`, `md`  |
+| `--verbose`      | Include full envelope (`ok`, `data`, `meta`) |
 
 ## Examples
 

@@ -170,8 +170,7 @@ function resolvePackageRoot(): string {
 
 /** Returns the hash file path for a CLI. */
 function hashPath(name: string): string {
-  const dir =
-    process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share')
+  const dir = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share')
   return path.join(dir, 'incur', `${name}.json`)
 }
 
