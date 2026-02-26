@@ -481,9 +481,10 @@ async function serveImpl(
       return
     }
     if (verbose) return writeln(Formatter.format(output, format))
-    const payload = output.ok
-      ? { ...(output.data as object), ...(cta ? { cta } : undefined) }
-      : { ...output.error, ...(cta ? { cta } : undefined) }
+    const base = output.ok ? output.data : output.error
+    if (!cta) return writeln(Formatter.format(base, format))
+    const payload =
+      typeof base === 'object' && base !== null ? { ...base, cta } : { data: base, cta }
     writeln(Formatter.format(payload, format))
   }
 
