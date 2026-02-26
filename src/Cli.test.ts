@@ -1113,6 +1113,43 @@ describe('help', () => {
       "
     `)
   })
+
+  test('--help shows hint after examples', async () => {
+    const cli = Cli.create('tool')
+    cli.command('deploy', {
+      description: 'Deploy the app',
+      hint: 'Run "tool status" to check deployment progress.',
+      run: () => ({ ok: true }),
+    })
+
+    const { output } = await serve(cli, ['deploy', '--help'])
+    expect(output).toMatchInlineSnapshot(`
+      "tool deploy — Deploy the app
+
+      Usage: tool deploy
+
+      Run "tool status" to check deployment progress.
+
+      Global Options:
+        --format <toon|json|yaml|md>  Output format
+        --help                        Show help
+        --llms                        Print LLM-readable manifest
+        --verbose                     Show full output envelope
+        --version                     Show version
+      "
+    `)
+  })
+
+  test('--help omits hint when not set', async () => {
+    const cli = Cli.create('tool')
+    cli.command('ping', {
+      description: 'Health check',
+      run: () => ({ pong: true }),
+    })
+
+    const { output } = await serve(cli, ['ping', '--help'])
+    expect(output).not.toContain('hint')
+  })
 })
 
 describe('tty', () => {

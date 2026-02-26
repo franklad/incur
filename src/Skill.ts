@@ -7,6 +7,7 @@ export type CommandInfo = {
   description?: string | undefined
   args?: z.ZodObject<any> | undefined
   env?: z.ZodObject<any> | undefined
+  hint?: string | undefined
   options?: z.ZodObject<any> | undefined
   output?: z.ZodObject<any> | undefined
   examples?: { command: string; description?: string }[] | undefined
@@ -176,6 +177,9 @@ function renderCommandBody(cli: string, cmd: CommandInfo, level = 1): string {
     })
     sections.push(`${sub} Examples\n\n\`\`\`sh\n${lines.join('\n\n')}\n\`\`\``)
   }
+
+  // Hint
+  if (cmd.hint) sections.push(`> ${cmd.hint}`)
 
   return sections.join('\n\n')
 }

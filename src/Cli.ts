@@ -351,6 +351,7 @@ async function serveImpl(
           description: resolved.command.description,
           args: resolved.command.args,
           env: resolved.command.env,
+          hint: resolved.command.hint,
           options: resolved.command.options,
           examples: formatExamples(resolved.command.examples),
         }),
@@ -523,6 +524,7 @@ function formatHumanValidationError(
       description: command.description,
       args: command.args,
       env: command.env,
+      hint: command.hint,
       options: command.options,
       examples: formatExamples(command.examples),
     }),
@@ -792,6 +794,7 @@ function collectSkillCommands(
       if (entry.description) cmd.description = entry.description
       if (entry.args) cmd.args = entry.args
       if (entry.env) cmd.env = entry.env
+      if (entry.hint) cmd.hint = entry.hint
       if (entry.options) cmd.options = entry.options
       if (entry.output) cmd.output = entry.output
       const examples = formatExamples(entry.examples)
@@ -932,6 +935,8 @@ type CommandDefinition<
   examples?: Example<args, options>[] | undefined
   /** Default output format. Overridden by `--format` or `--json`. */
   format?: Formatter.Format | undefined
+  /** Plain text hint displayed after examples and before global options. */
+  hint?: string | undefined
   /** Zod schema for named options/flags. */
   options?: options | undefined
   /** Zod schema for the command's return value. */

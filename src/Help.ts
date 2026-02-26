@@ -51,6 +51,8 @@ export declare namespace formatCommand {
     env?: z.ZodObject<any> | undefined
     /** Formatted usage examples. */
     examples?: { command: string; description?: string }[] | undefined
+    /** Plain text hint displayed after examples and before global options. */
+    hint?: string | undefined
     /** Zod schema for named options/flags. */
     options?: z.ZodObject<any> | undefined
   }
@@ -58,7 +60,7 @@ export declare namespace formatCommand {
 
 /** Formats help text for a leaf command. */
 export function formatCommand(name: string, options: formatCommand.Options = {}): string {
-  const { alias, description, args, env, options: opts, examples } = options
+  const { alias, description, args, env, hint, options: opts, examples } = options
   const lines: string[] = []
 
   // Header
@@ -130,6 +132,12 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
         lines.push(`  ${cmd}${' '.repeat(maxLen - cmd.length)}  ${ex.description}`)
       else lines.push(`  ${cmd}`)
     }
+  }
+
+  // Hint
+  if (hint) {
+    lines.push('')
+    lines.push(hint)
   }
 
   lines.push(...globalOptionsLines())
