@@ -20,7 +20,7 @@ export async function sync(
   const entries = collectEntries(commands, [], groups)
   const files = Skill.split(name, entries, depth, groups)
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `clac-skills-${name}-`))
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `incur-skills-${name}-`))
   try {
     const skills: sync.Skill[] = []
     for (const file of files) {

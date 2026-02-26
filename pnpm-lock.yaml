@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  clac: workspace:*
+  incur: workspace:*
 
 importers:
 
@@ -48,19 +48,13 @@ importers:
 
   examples/npm:
     dependencies:
-      clac:
+      incur:
         specifier: workspace:*
         version: link:../..
     devDependencies:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
-
-  playgrounds/gh:
-    dependencies:
-      clac:
-        specifier: workspace:*
-        version: link:../..
 
 packages:
 

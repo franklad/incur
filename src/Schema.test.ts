@@ -1,4 +1,4 @@
-import { Schema, z } from 'clac'
+import { Schema, z } from 'incur'
 
 describe('toJsonSchema', () => {
   test('converts z.string()', () => {

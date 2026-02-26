@@ -1,4 +1,4 @@
-import { Cli, Errors, Typegen, z } from 'clac'
+import { Cli, Errors, Typegen, z } from 'incur'
 
 describe('routing', () => {
   test('top-level command', async () => {
@@ -329,7 +329,7 @@ describe('error handling', () => {
     `)
   })
 
-  test('ClacError preserves code and retryable', async () => {
+  test('IncurError preserves code and retryable', async () => {
     const { output, exitCode } = await serve(createApp(), ['explode-clac', '--format', 'json'])
     expect(exitCode).toBe(1)
     expect(json(output)).toMatchInlineSnapshot(`
@@ -374,7 +374,7 @@ describe('error handling', () => {
     `)
   })
 
-  test('ClacError in nested command', async () => {
+  test('IncurError in nested command', async () => {
     const { output, exitCode } = await serve(createApp(), [
       'project',
       'delete',
@@ -554,7 +554,7 @@ describe('help', () => {
         config         Show current configuration
         echo           Echo back arguments
         explode        Always fails
-        explode-clac   Fails with ClacError
+        explode-clac   Fails with IncurError
         ping           Health check
         project        Manage projects
         slow           Async command
@@ -726,7 +726,7 @@ describe('tty', () => {
     `)
   })
 
-  test('tty ClacError shows code', async () => {
+  test('tty IncurError shows code', async () => {
     const { output, exitCode } = await serve(createApp(), ['explode-clac'], { tty: true })
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
@@ -836,7 +836,7 @@ describe('--llms', () => {
   test('json manifest lists all leaf commands sorted', async () => {
     const { output } = await serve(createApp(), ['--llms', '--format', 'json'])
     const manifest = json(output)
-    expect(manifest.version).toBe('clac.v1')
+    expect(manifest.version).toBe('incur.v1')
     const names = manifest.commands.map((c: any) => c.name)
     expect(names).toMatchInlineSnapshot(`
       [
@@ -1024,14 +1024,14 @@ describe('--llms', () => {
 
   test('--llms --format yaml', async () => {
     const { output } = await serve(createApp(), ['--llms', '--format', 'yaml'])
-    expect(output).toContain('version: clac.v1')
+    expect(output).toContain('version: incur.v1')
   })
 })
 
 describe('typegen', () => {
   test('generates correct .d.ts for entire CLI', () => {
     expect(Typegen.fromCli(createApp())).toMatchInlineSnapshot(`
-      "declare module 'clac' {
+      "declare module 'incur' {
         interface Register {
           commands: {
             'auth login': { args: {}; options: { hostname: string; web: boolean; scopes: string[] } }
@@ -1468,7 +1468,7 @@ function createApp() {
 
       run({ args, options }) {
         if (!options.force)
-          throw new Errors.ClacError({
+          throw new Errors.IncurError({
             code: 'CONFIRMATION_REQUIRED',
             message: `Use --force to delete project ${args.id}`,
             retryable: true,
@@ -1580,9 +1580,9 @@ function createApp() {
   })
 
   cli.command('explode-clac', {
-    description: 'Fails with ClacError',
+    description: 'Fails with IncurError',
     run() {
-      throw new Errors.ClacError({
+      throw new Errors.IncurError({
         code: 'QUOTA_EXCEEDED',
         message: 'Rate limit exceeded',
         retryable: true,

@@ -4,4 +4,4 @@ packages:
   - playgrounds/*
 
 overrides:
-  clac: workspace:*
+  incur: workspace:*

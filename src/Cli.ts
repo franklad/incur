@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 
 import type { FieldError } from './Errors.js'
-import { ClacError, ValidationError } from './Errors.js'
+import { IncurError, ValidationError } from './Errors.js'
 import * as Formatter from './Formatter.js'
 import * as Help from './Help.js'
 import type { OneOf } from './internal/types.js'
@@ -567,13 +567,13 @@ async function serveImpl(
       ok: false,
       error: {
         code:
-          error instanceof ClacError
+          error instanceof IncurError
             ? error.code
             : error instanceof ValidationError
               ? 'VALIDATION_ERROR'
               : 'UNKNOWN',
         message: error instanceof Error ? error.message : String(error),
-        ...(error instanceof ClacError ? { retryable: error.retryable } : undefined),
+        ...(error instanceof IncurError ? { retryable: error.retryable } : undefined),
         ...(error instanceof ValidationError ? { fieldErrors: error.fieldErrors } : undefined),
       },
       meta: {
@@ -751,7 +751,7 @@ export const toCommands = new WeakMap<Cli, Map<string, CommandEntry>>()
 const toRootDefinition = new WeakMap<Root, CommandDefinition<any, any, any>>()
 
 /** @internal Sentinel symbol for `ok()` and `error()` return values. */
-const sentinel = Symbol.for('clac.sentinel')
+const sentinel = Symbol.for('incur.sentinel')
 
 /** @internal A tagged ok result returned by the `ok` context helper. */
 type OkResult = {
@@ -822,7 +822,7 @@ function formatCta(name: string, cta: Cta): FormattedCta {
 /** @internal Builds the `--llms` manifest from the command tree. */
 function buildManifest(commands: Map<string, CommandEntry>, prefix: string[] = []) {
   return {
-    version: 'clac.v1',
+    version: 'incur.v1',
     commands: collectCommands(commands, prefix).sort((a, b) => a.name.localeCompare(b.name)),
   }
 }

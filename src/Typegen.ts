@@ -10,14 +10,14 @@ export async function generate(input: string, output: string): Promise<void> {
   await fs.writeFile(output, fromCli(cli))
 }
 
-/** Generates a `.d.ts` declaration string for the `clac/Register` module augmentation. */
+/** Generates a `.d.ts` declaration string for the `incur` module augmentation. */
 export function fromCli(cli: Cli.Cli): string {
   const commands = Cli.toCommands.get(cli)
   if (!commands) throw new Error('No commands registered on this CLI instance')
 
   const entries = collectEntries(commands, [])
 
-  const lines: string[] = ["declare module 'clac' {", '  interface Register {', '    commands: {']
+  const lines: string[] = ["declare module 'incur' {", '  interface Register {', '    commands: {']
 
   for (const { name, args, options } of entries)
     lines.push(

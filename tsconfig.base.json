@@ -7,8 +7,8 @@
     "moduleResolution": "nodenext",
     "target": "esnext",
     "paths": {
-      "clac": ["./src/index.ts"],
-      "clac/register": ["./src/Register.ts"]
+      "incur": ["./src/index.ts"],
+      "incur/register": ["./src/Register.ts"]
     },
 
     // Other Outputs

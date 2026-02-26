@@ -1,6 +1,6 @@
 /** Base error with shortMessage, details from cause chain, and walk(). */
 export class BaseError extends Error {
-  override name = 'Clac.BaseError'
+  override name = 'Incur.BaseError'
   /** The short, human-readable error message (without details). */
   shortMessage: string
   /** Details extracted from the cause's message, if any. */
@@ -33,8 +33,8 @@ export declare namespace BaseError {
 }
 
 /** CLI error with code, hint, and retryable flag. */
-export class ClacError extends BaseError {
-  override name = 'Clac.ClacError'
+export class IncurError extends BaseError {
+  override name = 'Incur.IncurError'
   /** Machine-readable error code (e.g. `'NOT_AUTHENTICATED'`). */
   code: string
   /** Actionable hint for the user. */
@@ -42,7 +42,7 @@ export class ClacError extends BaseError {
   /** Whether the operation can be retried. */
   retryable: boolean
 
-  constructor(options: ClacError.Options) {
+  constructor(options: IncurError.Options) {
     super(options.message, options.cause ? { cause: options.cause } : undefined)
     this.code = options.code
     this.hint = options.hint
@@ -50,8 +50,8 @@ export class ClacError extends BaseError {
   }
 }
 
-export declare namespace ClacError {
-  /** Options for constructing a ClacError. */
+export declare namespace IncurError {
+  /** Options for constructing a IncurError. */
   type Options = {
     /** Machine-readable error code. */
     code: string
@@ -80,7 +80,7 @@ export type FieldError = {
 
 /** Validation error with per-field error details. */
 export class ValidationError extends BaseError {
-  override name = 'Clac.ValidationError'
+  override name = 'Incur.ValidationError'
   /** Per-field validation errors. */
   fieldErrors: FieldError[]
 
@@ -104,7 +104,7 @@ export declare namespace ValidationError {
 
 /** Error thrown when argument parsing fails (unknown flags, missing values). */
 export class ParseError extends BaseError {
-  override name = 'Clac.ParseError'
+  override name = 'Incur.ParseError'
 
   constructor(options: ParseError.Options) {
     super(options.message, options.cause ? { cause: options.cause } : undefined)

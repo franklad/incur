@@ -1,4 +1,4 @@
-import { Cli, z } from 'clac'
+import { Cli, z } from 'incur'
 import { expectTypeOf, test } from 'vitest'
 
 test('args in run() infers from args schema', () => {

@@ -1,4 +1,4 @@
-import { Cli, SyncSkills } from 'clac'
+import { Cli, SyncSkills } from 'incur'
 
 let mockExecError: Error | null = null
 

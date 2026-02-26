@@ -1,5 +1,5 @@
 import { decode } from '@toon-format/toon'
-import { Formatter } from 'clac'
+import { Formatter } from 'incur'
 
 describe('format', () => {
   test('formats success envelope as TOON', () => {

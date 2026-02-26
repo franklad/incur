@@ -1,4 +1,4 @@
-import { Cli, Errors, z } from 'clac'
+import { Cli, Errors, z } from 'incur'
 
 async function serve(
   cli: { serve: Cli.Cli['serve'] },
@@ -162,11 +162,11 @@ describe('serve', () => {
     `)
   })
 
-  test('ClacError in run() populates code/retryable', async () => {
+  test('IncurError in run() populates code/retryable', async () => {
     const cli = Cli.create('test')
     cli.command('fail', {
       run() {
-        throw new Errors.ClacError({
+        throw new Errors.IncurError({
           code: 'NOT_AUTHENTICATED',
           message: 'Token not found',
           retryable: false,
@@ -260,7 +260,7 @@ describe('--llms', () => {
 
     const { output } = await serve(cli, ['--llms', '--format', 'json'])
     const manifest = JSON.parse(output)
-    expect(manifest.version).toBe('clac.v1')
+    expect(manifest.version).toBe('incur.v1')
     expect(manifest.commands).toHaveLength(1)
     expect(manifest.commands[0].name).toBe('ping')
     expect(manifest.commands[0].description).toBe('Health check')
@@ -369,7 +369,7 @@ describe('--llms', () => {
     cli.command('ping', { description: 'Health check', run: () => ({ pong: true }) })
 
     const { output } = await serve(cli, ['--llms', '--format', 'yaml'])
-    expect(output).toContain('version: clac.v1')
+    expect(output).toContain('version: incur.v1')
     expect(output).toContain('name: ping')
   })
 
@@ -433,7 +433,7 @@ describe('--llms', () => {
             },
           },
         ],
-        "version": "clac.v1",
+        "version": "incur.v1",
       }
     `)
   })
@@ -1240,11 +1240,11 @@ describe('tty', () => {
     `)
   })
 
-  test('TTY ClacError shows code and message', async () => {
+  test('TTY IncurError shows code and message', async () => {
     const cli = Cli.create('test')
     cli.command('fail', {
       run() {
-        throw new Errors.ClacError({ code: 'NOT_FOUND', message: 'Resource not found' })
+        throw new Errors.IncurError({ code: 'NOT_FOUND', message: 'Resource not found' })
       },
     })
 

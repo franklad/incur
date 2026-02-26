@@ -4,7 +4,7 @@
  * @example
  * ```ts
  * // codegen: run `mycli --codegen` to generate this file
- * declare module 'clac/Register' {
+ * declare module 'incur' {
  *   interface Register {
  *     commands: {
  *       get: { args: { id: number }; options: {} }

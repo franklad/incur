@@ -4,12 +4,12 @@ import { z } from 'zod'
 import * as Cli from './Cli.js'
 import * as Typegen from './Typegen.js'
 
-const cli = Cli.create('clac', {
-  description: 'CLI for clac',
+const cli = Cli.create('incur', {
+  description: 'CLI for incur',
   sync: {
     depth: 1,
     include: ['_root'],
-    suggestions: ['build a cli with clac', 'generate clac types'],
+    suggestions: ['build a cli with incur', 'generate incur types'],
   },
 }).command('gen', {
   description: 'Generate type definitions for development.',
@@ -21,7 +21,7 @@ const cli = Cli.create('clac', {
   async run({ options }) {
     const dir = options.dir ?? '.'
     const entry = options.entry ?? dir
-    const output = options.output ?? path.join(dir, 'clac.generated.ts')
+    const output = options.output ?? path.join(dir, 'incur.generated.ts')
     await Typegen.generate(entry, output)
     return { dir, entry, output }
   },

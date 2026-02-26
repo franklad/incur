@@ -1,10 +1,10 @@
-import { Errors } from 'clac'
+import { Errors } from 'incur'
 
 describe('BaseError', () => {
   test('extends Error and sets name', () => {
     const error = new Errors.BaseError('something went wrong')
     expect(error).toBeInstanceOf(Error)
-    expect(error.name).toBe('Clac.BaseError')
+    expect(error.name).toBe('Incur.BaseError')
     expect(error.shortMessage).toBe('something went wrong')
     expect(error.message).toBe('something went wrong')
   })
@@ -28,9 +28,9 @@ describe('BaseError', () => {
   })
 
   test('walk(fn) returns first matching cause', () => {
-    const inner = new Errors.ClacError({ code: 'FOO', message: 'foo' })
+    const inner = new Errors.IncurError({ code: 'FOO', message: 'foo' })
     const outer = new Errors.BaseError('top', { cause: inner })
-    expect(outer.walk((e) => e instanceof Errors.ClacError)).toBe(inner)
+    expect(outer.walk((e) => e instanceof Errors.IncurError)).toBe(inner)
   })
 
   test('walk() without cause returns self', () => {
@@ -39,15 +39,15 @@ describe('BaseError', () => {
   })
 })
 
-describe('ClacError', () => {
+describe('IncurError', () => {
   test('has code, hint, retryable', () => {
-    const error = new Errors.ClacError({
+    const error = new Errors.IncurError({
       code: 'NOT_AUTHENTICATED',
       message: 'Token not found',
       hint: 'Set GH_TOKEN env var',
       retryable: false,
     })
-    expect(error.name).toBe('Clac.ClacError')
+    expect(error.name).toBe('Incur.IncurError')
     expect(error.code).toBe('NOT_AUTHENTICATED')
     expect(error.hint).toBe('Set GH_TOKEN env var')
     expect(error.retryable).toBe(false)
@@ -55,7 +55,7 @@ describe('ClacError', () => {
   })
 
   test('defaults retryable to false', () => {
-    const error = new Errors.ClacError({ code: 'FAIL', message: 'fail' })
+    const error = new Errors.IncurError({ code: 'FAIL', message: 'fail' })
     expect(error.retryable).toBe(false)
   })
 })
@@ -73,7 +73,7 @@ describe('ValidationError', () => {
         },
       ],
     })
-    expect(error.name).toBe('Clac.ValidationError')
+    expect(error.name).toBe('Incur.ValidationError')
     expect(error.fieldErrors).toEqual([
       {
         path: 'state',
@@ -89,7 +89,7 @@ describe('ValidationError', () => {
 describe('ParseError', () => {
   test('sets name', () => {
     const error = new Errors.ParseError({ message: 'Unknown flag: --foo' })
-    expect(error.name).toBe('Clac.ParseError')
+    expect(error.name).toBe('Incur.ParseError')
     expect(error.shortMessage).toBe('Unknown flag: --foo')
     expect(error).toBeInstanceOf(Errors.BaseError)
   })

@@ -9,6 +9,6 @@
     "tsx": "^4.21.0"
   },
   "dependencies": {
-    "clac": "workspace:*"
+    "incur": "workspace:*"
   }
 }

@@ -1,4 +1,4 @@
-import { Parser, z } from 'clac'
+import { Parser, z } from 'incur'
 import { expectTypeOf, test } from 'vitest'
 
 test('narrows args from schema', () => {

@@ -1,4 +1,4 @@
-import { Help, z } from 'clac'
+import { Help, z } from 'incur'
 
 describe('formatCommand', () => {
   test('formats leaf command with args and options', () => {

@@ -1,4 +1,4 @@
-import { Skill, z } from 'clac'
+import { Skill, z } from 'incur'
 
 test('generates skill file with frontmatter and heading', () => {
   const result = Skill.generate('test', [{ name: 'ping', description: 'Health check' }])

@@ -1,4 +1,4 @@
-import { Parser, z } from 'clac'
+import { Parser, z } from 'incur'
 
 describe('parse', () => {
   test('returns empty args and options when no schemas', () => {
@@ -88,7 +88,7 @@ describe('parse', () => {
       Parser.parse(['--unknown', 'val'], {
         options: z.object({ state: z.string() }),
       }),
-    ).toThrow(expect.objectContaining({ name: 'Clac.ParseError' }))
+    ).toThrow(expect.objectContaining({ name: 'Incur.ParseError' }))
   })
 
   test('throws ValidationError on missing required positional args', () => {
@@ -96,7 +96,7 @@ describe('parse', () => {
       Parser.parse([], {
         args: z.object({ name: z.string() }),
       }),
-    ).toThrow(expect.objectContaining({ name: 'Clac.ValidationError' }))
+    ).toThrow(expect.objectContaining({ name: 'Incur.ValidationError' }))
   })
 
   test('throws ValidationError on enum mismatch', () => {
@@ -104,7 +104,7 @@ describe('parse', () => {
       Parser.parse(['--state', 'invalid'], {
         options: z.object({ state: z.enum(['open', 'closed']) }),
       }),
-    ).toThrow(expect.objectContaining({ name: 'Clac.ValidationError' }))
+    ).toThrow(expect.objectContaining({ name: 'Incur.ValidationError' }))
   })
 
   test('parses positional args and options together', () => {

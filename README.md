@@ -1,4 +1,4 @@
-# clac
+# incur
 
 Simple CLI framework for agents and humans.
 
@@ -7,21 +7,21 @@ Simple CLI framework for agents and humans.
 Prompt your agent:
 
 ```
-Run `npx clac skills add`, then show me what I can do with clac.
+Run `npx incur skills add`, then show me what I can do with incur.
 ```
 
 ## Install
 
 ```bash
-npm i clac
+npm i incur
 ```
 
 ```bash
-pnpm i clac
+pnpm i incur
 ```
 
 ```bash
-bun i clac
+bun i incur
 ```
 
 ## Usage
@@ -29,7 +29,7 @@ bun i clac
 ### Single-command CLI
 
 ```ts
-import { Cli, z } from 'clac'
+import { Cli, z } from 'incur'
 
 Cli.create('greet', {
   description: 'A greeting CLI',
@@ -50,7 +50,7 @@ greet world
 ### Multi-command CLI
 
 ```ts
-import { Cli, z } from 'clac'
+import { Cli, z } from 'incur'
 
 Cli.create('my-cli', {
   description: 'My CLI',
@@ -101,7 +101,7 @@ cli
 
 ### Agent discovery
 
-Every clac CLI gets a built-in `--llms` flag and `skills add` command:
+Every incur CLI gets a built-in `--llms` flag and `skills add` command:
 
 ```sh
 # Output machine-readable manifest

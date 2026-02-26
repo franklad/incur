@@ -5,8 +5,8 @@
     "changeset:version": "changeset version",
     "check": "oxlint --fix --ignore-pattern package.json && oxfmt",
     "check:types": "tsc -b && pnpm -r check:types",
-    "clac": "node --import tsx src/bin.ts",
-    "cli:skills": "pnpm clac skills add",
+    "incur": "node --import tsx src/bin.ts",
+    "cli:skills": "pnpm incur skills add",
     "dev": "zile dev",
     "test": "vitest"
   },
@@ -22,7 +22,7 @@
   },
   "packageManager": "pnpm@10.30.2",
   "[!start-pkg]": "",
-  "name": "clac",
+  "name": "incur",
   "type": "module",
   "version": "0.0.0",
   "license": "MIT",
@@ -37,8 +37,8 @@
   },
   "sideEffects": false,
   "bin": {
-    "clac": "./dist/bin.js",
-    "clac.src": "./src/bin.ts"
+    "incur": "./dist/bin.js",
+    "incur.src": "./src/bin.ts"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",

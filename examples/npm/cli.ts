@@ -1,4 +1,4 @@
-import { Cli, z } from 'clac'
+import { Cli, z } from 'incur'
 
 const cli = Cli.create('npm', {
   version: '10.9.2',

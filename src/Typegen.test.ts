@@ -1,4 +1,4 @@
-import { Cli, Typegen, z } from 'clac'
+import { Cli, Typegen, z } from 'incur'
 
 describe('fromCli', () => {
   test('simple commands with args and options', () => {
@@ -13,7 +13,7 @@ describe('fromCli', () => {
       })
 
     expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
-      "declare module 'clac' {
+      "declare module 'incur' {
         interface Register {
           commands: {
             'get': { args: { id: number }; options: {} }
@@ -29,7 +29,7 @@ describe('fromCli', () => {
     const cli = Cli.create('test').command('ping', { run: () => ({}) })
 
     expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
-      "declare module 'clac' {
+      "declare module 'incur' {
         interface Register {
           commands: {
             'ping': { args: {}; options: {} }
@@ -54,7 +54,7 @@ describe('fromCli', () => {
     cli.command(pr)
 
     expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
-      "declare module 'clac' {
+      "declare module 'incur' {
         interface Register {
           commands: {
             'pr create': { args: { title: string }; options: {} }
@@ -77,7 +77,7 @@ describe('fromCli', () => {
     cli.command(pr)
 
     expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
-      "declare module 'clac' {
+      "declare module 'incur' {
         interface Register {
           commands: {
             'pr review approve': { args: { id: number }; options: {} }
@@ -136,7 +136,7 @@ describe('fromCli', () => {
     cli.command(pr)
 
     expect(Typegen.fromCli(cli)).toMatchInlineSnapshot(`
-      "declare module 'clac' {
+      "declare module 'incur' {
         interface Register {
           commands: {
             'ping': { args: {}; options: {} }

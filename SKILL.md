@@ -1,31 +1,31 @@
 ---
 name: build-clis
 description: Building CLI frameworks for agents and humans.
-command: clac
+command: incur
 ---
 
-# clac
+# incur
 
 TypeScript framework for building CLIs for agents and human consumption. Strictly typed schemas for arguments and options, structured output envelopes, auto-generated skill files, and agent discovery via `--llms`.
 
 ## Install
 
 ```sh
-npm i clac
+npm i incur
 ```
 
 ```sh
-pnpm i clac
+pnpm i incur
 ```
 
 ```sh
-bun i clac
+bun i incur
 ```
 
 ## Quick Start
 
 ```ts
-import { Cli, z } from 'clac'
+import { Cli, z } from 'incur'
 
 const cli = Cli.create('greet', {
   description: 'A greeting CLI',
@@ -237,7 +237,7 @@ Environment variables are parsed from `process.env` and validated against the Zo
 
 ## Output
 
-Every command returns data. clac wraps it in a structured envelope and serializes to the requested format.
+Every command returns data. incur wraps it in a structured envelope and serializes to the requested format.
 
 ### Output schema
 
@@ -290,7 +290,7 @@ Without `--verbose`, only `data` is emitted. On errors, only the `error` block i
 
 ### TTY detection
 
-clac adapts output based on whether stdout is a TTY:
+incur adapts output based on whether stdout is a TTY:
 
 | Scenario              | TTY (human)             | Non-TTY (agent/pipe) |
 | --------------------- | ----------------------- | -------------------- |
@@ -363,7 +363,7 @@ run({ args, error }) {
 
 ### `skills add` built-in command
 
-All clac-based CLIs can auto-generate and install agent skill files with `skills add`:
+All incur-based CLIs can auto-generate and install agent skill files with `skills add`:
 
 ```sh
 my-cli skills add
@@ -393,7 +393,7 @@ const cli = Cli.create('my-cli', {
 
 ### `--llms` flag
 
-Every clac CLI gets a built-in `--llms` flag that outputs a machine-readable manifest of all commands:
+Every incur CLI gets a built-in `--llms` flag that outputs a machine-readable manifest of all commands:
 
 ```sh
 tool --llms
@@ -424,7 +424,7 @@ Use `--llms --format json` for JSON schema manifest:
 
 ```json
 {
-  "version": "clac.v1",
+  "version": "incur.v1",
   "commands": [
     {
       "name": "install",
@@ -516,15 +516,15 @@ await cli.serve(['install', 'express', '--json'], {
 Generate type definitions for your CLI's command map to get typed CTAs:
 
 ```sh
-clac gen
+incur gen
 ```
 
-This creates a `clac.generated.ts` file that registers your commands on the `Cli.Commands` type, enabling autocomplete on CTA command names, args, and options.
+This creates a `incur.generated.ts` file that registers your commands on the `Cli.Commands` type, enabling autocomplete on CTA command names, args, and options.
 
 ## Full Example
 
 ```ts
-import { Cli, z } from 'clac'
+import { Cli, z } from 'incur'
 
 const cli = Cli.create('npm', {
   version: '10.9.2',
@@ -590,4 +590,4 @@ cli.serve()
 export default cli
 ```
 
-> Always `export default cli` so that `clac gen` can import it and generate types.
+> Always `export default cli` so that `incur gen` can import it and generate types.
