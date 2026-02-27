@@ -25,12 +25,13 @@ export async function sync(
   try {
     const skills: sync.Skill[] = []
     for (const file of files) {
-      const skillDir = file.dir || name
-      const filePath = path.join(tmpDir, skillDir, 'SKILL.md')
+      const filePath = file.dir
+        ? path.join(tmpDir, file.dir, 'SKILL.md')
+        : path.join(tmpDir, 'SKILL.md')
       await fs.mkdir(path.dirname(filePath), { recursive: true })
       await fs.writeFile(filePath, `${file.content}\n`)
       const descMatch = file.content.match(/^description:\s*(.+)$/m)
-      skills.push({ name: skillDir, description: descMatch?.[1] })
+      skills.push({ name: file.dir || name, description: descMatch?.[1] })
     }
 
     // Include additional SKILL.md files matched by glob patterns

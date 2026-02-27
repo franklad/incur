@@ -81,7 +81,9 @@ export function install(
     // Copy to canonical location
     fs.rmSync(canonicalDir, { recursive: true, force: true })
     fs.mkdirSync(canonicalDir, { recursive: true })
-    fs.cpSync(skill.dir, canonicalDir, { recursive: true })
+    if (skill.root)
+      fs.copyFileSync(path.join(skill.dir, 'SKILL.md'), path.join(canonicalDir, 'SKILL.md'))
+    else fs.cpSync(skill.dir, canonicalDir, { recursive: true })
     paths.push(canonicalDir)
 
     // Create symlinks for non-universal agents
@@ -141,18 +143,10 @@ export declare namespace install {
 }
 
 /** Recursively discovers skill directories (those containing a `SKILL.md`). */
-function discoverSkills(root: string): { name: string; dir: string }[] {
-  const results: { name: string; dir: string }[] = []
+function discoverSkills(rootDir: string): { name: string; dir: string; root?: boolean }[] {
+  const results: { name: string; dir: string; root?: boolean }[] = []
 
   function visit(dir: string) {
-    const skillPath = path.join(dir, 'SKILL.md')
-    if (fs.existsSync(skillPath)) {
-      const content = fs.readFileSync(skillPath, 'utf8')
-      const nameMatch = content.match(/^name:\s*(.+)$/m)
-      const name = sanitizeName(nameMatch?.[1] ?? path.basename(dir))
-      results.push({ name, dir })
-    }
-
     let entries: fs.Dirent[]
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -160,11 +154,30 @@ function discoverSkills(root: string): { name: string; dir: string }[] {
       return
     }
     for (const entry of entries) {
-      if (entry.isDirectory()) visit(path.join(dir, entry.name))
+      if (!entry.isDirectory()) continue
+      const subDir = path.join(dir, entry.name)
+      const skillPath = path.join(subDir, 'SKILL.md')
+      if (fs.existsSync(skillPath)) {
+        const content = fs.readFileSync(skillPath, 'utf8')
+        const nameMatch = content.match(/^name:\s*(.+)$/m)
+        results.push({ name: sanitizeName(nameMatch?.[1] ?? entry.name), dir: subDir })
+      }
+      visit(subDir)
     }
   }
 
-  visit(root)
+  visit(rootDir)
+
+  // Root-level SKILL.md (e.g. depth=0)
+  const rootSkill = path.join(rootDir, 'SKILL.md')
+  if (fs.existsSync(rootSkill)) {
+    const content = fs.readFileSync(rootSkill, 'utf8')
+    const nameMatch = content.match(/^name:\s*(.+)$/m)
+    const name = sanitizeName(nameMatch?.[1] ?? 'skill')
+    if (!results.some((r) => r.name === name))
+      results.push({ name, dir: rootDir, root: true })
+  }
+
   return results
 }
 
