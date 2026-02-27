@@ -717,6 +717,7 @@ describe('help', () => {
         stream         Stream chunks
         stream-error   Stream with mid-stream error
         stream-ok      Stream with ok() return
+        stream-text    Stream plain text
         stream-throw   Stream that throws
         validate-fail  Fails validation
 
@@ -881,6 +882,7 @@ describe('--llms', () => {
         "stream",
         "stream-error",
         "stream-ok",
+        "stream-text",
         "stream-throw",
         "validate-fail",
       ]
@@ -1079,6 +1081,7 @@ describe('typegen', () => {
             'stream': { args: {}; options: {} }
             'stream-error': { args: {}; options: {} }
             'stream-ok': { args: {}; options: {} }
+            'stream-text': { args: {}; options: {} }
             'stream-throw': { args: {}; options: {} }
             'validate-fail': { args: { email: string; age: number }; options: {} }
           }
