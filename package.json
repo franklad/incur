@@ -1,0 +1,56 @@
+{
+  "scripts": {
+    "build": "zile",
+    "changeset:publish": "zile publish:prepare && changeset publish && zile publish:post",
+    "changeset:version": "changeset version",
+    "check": "oxlint --fix --ignore-pattern package.json && oxfmt",
+    "check:types": "tsc -b",
+    "incur": "node --import tsx src/bin.ts",
+    "cli:skills": "pnpm incur skills add",
+    "dev": "zile dev",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@changesets/cli": "latest",
+    "@types/node": "latest",
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.50.0",
+    "tsx": "^4.21.0",
+    "typescript": "latest",
+    "vitest": "latest",
+    "zile": "latest"
+  },
+  "packageManager": "pnpm@10.30.2",
+  "[!start-pkg]": "",
+  "name": "incur",
+  "type": "module",
+  "version": "0.0.2",
+  "license": "MIT",
+  "files": [
+    "examples",
+    "dist",
+    "src",
+    "SKILL.md"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@toon-format/toon": "^2.1.0",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
+  },
+  "sideEffects": false,
+  "bin": {
+    "incur": "./dist/bin.js",
+    "incur.src": "./src/bin.ts"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "src": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  }
+}
