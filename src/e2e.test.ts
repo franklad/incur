@@ -282,7 +282,7 @@ describe('output formats', () => {
         },
         "meta": {
           "command": "ping",
-          "duration": "0ms",
+          "duration": "<stripped>",
         },
         "ok": true,
       }
@@ -308,7 +308,7 @@ describe('output formats', () => {
         },
         "meta": {
           "command": "project deploy status",
-          "duration": "0ms",
+          "duration": "<stripped>",
         },
         "ok": true,
       }
@@ -364,7 +364,7 @@ describe('error handling', () => {
             ],
             "description": "Suggested commands:",
           },
-          "duration": "0ms",
+          "duration": "<stripped>",
         },
         "ok": false,
       }
@@ -413,7 +413,7 @@ describe('error handling', () => {
         },
         "meta": {
           "command": "nonexistent",
-          "duration": "0ms",
+          "duration": "<stripped>",
         },
         "ok": false,
       }
@@ -575,7 +575,7 @@ describe('streaming', () => {
         ],
         "meta": {
           "command": "stream",
-          "duration": "0ms",
+          "duration": "<stripped>",
         },
         "ok": true,
       }
@@ -1261,7 +1261,7 @@ describe('edge cases', () => {
         },
         "meta": {
           "command": "project deploy create",
-          "duration": "0ms",
+          "duration": "<stripped>",
         },
         "ok": true,
       }
@@ -1414,7 +1414,9 @@ async function serve(
     ...options,
   })
   return {
-    output: output.replace(/duration: \d+ms/g, 'duration: <stripped>'),
+    output: output
+      .replace(/duration: \d+ms/g, 'duration: <stripped>')
+      .replace(/"duration": "\d+ms"/g, '"duration": "<stripped>"'),
     exitCode,
   }
 }
