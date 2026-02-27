@@ -103,7 +103,7 @@ export type Cta<commands extends CommandsMap = Commands> =
               description?: string | undefined
             })
 
-/** Creates a leaf CLI with a root handler and no subcommands. */
+/** Creates a CLI with a root handler. Can still register subcommands which take precedence. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
@@ -112,7 +112,7 @@ export function create<
 >(
   name: string,
   definition: create.Options<args, env, opts, output> & { run: Function },
-): Root<args, opts>
+): Cli<{ [key in typeof name]: { args: InferOutput<args>; options: InferOutput<opts> } }>
 /** Creates a router CLI that registers subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
@@ -120,7 +120,7 @@ export function create<
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
 >(name: string, definition?: create.Options<args, env, opts, output>): Cli
-/** Creates a leaf CLI from a single options object (e.g. package.json). */
+/** Creates a CLI with a root handler from a single options object. Can still register subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
@@ -128,7 +128,7 @@ export function create<
   const output extends z.ZodType | undefined = undefined,
 >(
   definition: create.Options<args, env, opts, output> & { name: string; run: Function },
-): Root<args, opts>
+): Cli<{ [key in (typeof definition)['name']]: { args: InferOutput<args>; options: InferOutput<opts> } }>
 /** Creates a router CLI from a single options object (e.g. package.json). */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
@@ -142,29 +142,7 @@ export function create(
 ): Cli | Root {
   const name = typeof nameOrDefinition === 'string' ? nameOrDefinition : nameOrDefinition.name
   const def = typeof nameOrDefinition === 'string' ? (definition ?? {}) : nameOrDefinition
-  if ('run' in def) {
-    const rootDef = def as CommandDefinition<any, any, any>
-    const leafCommands = new Map<string, CommandEntry>()
-    leafCommands.set(name, rootDef)
-
-    const leaf: Root = {
-      name,
-      description: def.description,
-      async serve(argv = process.argv.slice(2), options: serve.Options = {}) {
-        return serveImpl(name, leafCommands, [name, ...argv], {
-          ...options,
-          description: def.description,
-          format: def.format,
-          mcp: def.mcp,
-          sync: def.sync,
-          version: def.version,
-        })
-      },
-    }
-    toRootDefinition.set(leaf, rootDef)
-    toCommands.set(leaf as unknown as Cli, leafCommands)
-    return leaf
-  }
+  const rootDef = 'run' in def ? (def as CommandDefinition<any, any, any>) : undefined
 
   const commands = new Map<string, CommandEntry>()
 
@@ -177,9 +155,9 @@ export function create(
         commands.set(nameOrCli, def)
         return cli
       }
-      const rootDef = toRootDefinition.get(nameOrCli)
-      if (rootDef) {
-        commands.set(nameOrCli.name, rootDef)
+      const mountedRootDef = toRootDefinition.get(nameOrCli)
+      if (mountedRootDef) {
+        commands.set(nameOrCli.name, mountedRootDef)
         return cli
       }
       const sub = nameOrCli as Cli
@@ -194,12 +172,14 @@ export function create(
         description: def.description,
         format: def.format,
         mcp: def.mcp,
+        rootCommand: rootDef,
         sync: def.sync,
         version: def.version,
       })
     },
   }
 
+  if (rootDef) toRootDefinition.set(cli as unknown as Root, rootDef)
   toCommands.set(cli, commands)
   return cli
 }
@@ -521,18 +501,25 @@ async function serveImpl(
   }
 
   if (filtered.length === 0) {
-    writeln(
-      Help.formatRoot(name, {
-        description: options.description,
-        version: options.version,
-        commands: collectHelpCommands(commands),
-        root: true,
-      }),
-    )
-    return
+    if (options.rootCommand) {
+      // Root command with no args — treat as root invocation
+    } else {
+      writeln(
+        Help.formatRoot(name, {
+          description: options.description,
+          version: options.version,
+          commands: collectHelpCommands(commands),
+          root: true,
+        }),
+      )
+      return
+    }
   }
 
-  const resolved = resolveCommand(commands, filtered)
+  const resolved =
+    filtered.length === 0 && options.rootCommand
+      ? ({ command: options.rootCommand, path: name, rest: [] as string[] })
+      : resolveCommand(commands, filtered)
 
   // --help after a command → show help for that command
   if (help) {
@@ -542,17 +529,41 @@ async function serveImpl(
       const helpDesc = 'help' in resolved ? resolved.description : options.description
       const helpCmds = 'help' in resolved ? resolved.commands : commands
       const isRoot = helpName === name
-      writeln(
-        Help.formatRoot(helpName, {
-          description: helpDesc,
-          version: isRoot ? options.version : undefined,
-          commands: collectHelpCommands(helpCmds),
-          root: isRoot,
-        }),
-      )
+      // Root with both a handler and subcommands → show command help with subcommands
+      if (isRoot && options.rootCommand && helpCmds.size > 0) {
+        const cmd = options.rootCommand
+        writeln(
+          Help.formatCommand(name, {
+            alias: cmd.alias as Record<string, string> | undefined,
+            description: cmd.description ?? options.description,
+            version: options.version,
+            args: cmd.args,
+            env: cmd.env,
+            hint: cmd.hint,
+            options: cmd.options,
+            examples: formatExamples(cmd.examples),
+            usage: cmd.usage,
+            commands: collectHelpCommands(helpCmds),
+            root: true,
+          }),
+        )
+      } else {
+        writeln(
+          Help.formatRoot(helpName, {
+            description: helpDesc,
+            version: isRoot ? options.version : undefined,
+            commands: collectHelpCommands(helpCmds),
+            root: isRoot,
+          }),
+        )
+      }
     } else {
       const isRootCmd = resolved.path === name
       const commandName = isRootCmd ? name : `${name} ${resolved.path}`
+      const helpSubcommands =
+        isRootCmd && options.rootCommand && commands.size > 0
+          ? collectHelpCommands(commands)
+          : undefined
       writeln(
         Help.formatCommand(commandName, {
           alias: resolved.command.alias as Record<string, string> | undefined,
@@ -564,6 +575,7 @@ async function serveImpl(
           options: resolved.command.options,
           examples: formatExamples(resolved.command.examples),
           usage: resolved.command.usage,
+          commands: helpSubcommands,
           root: isRootCmd,
         }),
       )
@@ -607,9 +619,15 @@ async function serveImpl(
     writeln(Formatter.format(payload, format))
   }
 
-  if ('error' in resolved) {
-    const helpCmd = resolved.path ? `${name} ${resolved.path} --help` : `${name} --help`
-    const message = `'${resolved.error}' is not a command. See '${helpCmd}' for a list of available commands.`
+  // Fall back to root command when no subcommand matches
+  const effective =
+    'error' in resolved && options.rootCommand
+      ? { command: options.rootCommand, path: name, rest: filtered }
+      : resolved
+
+  if ('error' in effective) {
+    const helpCmd = effective.path ? `${name} ${effective.path} --help` : `${name} --help`
+    const message = `'${effective.error}' is not a command. See '${helpCmd}' for a list of available commands.`
     if (human) {
       writeln(formatHumanError({ code: 'COMMAND_NOT_FOUND', message }))
       exit(1)
@@ -619,7 +637,7 @@ async function serveImpl(
       ok: false,
       error: { code: 'COMMAND_NOT_FOUND', message },
       meta: {
-        command: resolved.error,
+        command: effective.error,
         duration: `${Math.round(performance.now() - start)}ms`,
       },
     })
@@ -627,7 +645,7 @@ async function serveImpl(
     return
   }
 
-  const { command, path, rest } = resolved
+  const { command, path, rest } = effective
 
   try {
     const { args, options: parsedOptions } = Parser.parse(rest, {
@@ -829,6 +847,8 @@ declare namespace serveImpl {
           command?: string | undefined
         }
       | undefined
+    /** Root command handler, invoked when no subcommand matches. */
+    rootCommand?: CommandDefinition<any, any, any> | undefined
     sync?:
       | {
           cwd?: string | undefined

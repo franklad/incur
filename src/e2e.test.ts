@@ -1187,6 +1187,89 @@ describe('composition', () => {
   })
 })
 
+describe('root command with subcommands', () => {
+  function createHybrid() {
+    const cli = Cli.create('tool', {
+      description: 'A tool with a default action',
+      args: z.object({ query: z.string().optional().describe('Search query') }),
+      run({ args }) {
+        return { default: true, query: args.query ?? null }
+      },
+    })
+    cli.command('info', {
+      description: 'Show info',
+      run: () => ({ info: true }),
+    })
+    cli.command('version', {
+      description: 'Show version',
+      run: () => ({ version: '1.0.0' }),
+    })
+    return cli
+  }
+
+  test('runs root handler with no args', async () => {
+    const { output } = await serve(createHybrid(), [])
+    expect(output).toMatchInlineSnapshot(`
+      "default: true
+      query: null
+      "
+    `)
+  })
+
+  test('runs root handler with positional args', async () => {
+    const { output } = await serve(createHybrid(), ['hello'])
+    expect(output).toMatchInlineSnapshot(`
+      "default: true
+      query: hello
+      "
+    `)
+  })
+
+  test('subcommand takes precedence', async () => {
+    const { output } = await serve(createHybrid(), ['info'])
+    expect(output).toMatchInlineSnapshot(`
+      "info: true
+      "
+    `)
+  })
+
+  test('--help shows root usage and subcommands', async () => {
+    const { output } = await serve(createHybrid(), ['--help'])
+    expect(output).toMatchInlineSnapshot(`
+      "tool — A tool with a default action
+
+      Usage: tool [query] | <command>
+
+      Arguments:
+        query  Search query
+
+      Commands:
+        info     Show info
+        version  Show version
+
+      Built-in Commands:
+        mcp add     Register as an MCP server
+        skills add  Sync skill files to your agent
+
+      Global Options:
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --mcp                               Start as MCP stdio server
+        --verbose                           Show full output envelope
+        --version                           Show version
+      "
+    `)
+  })
+
+  test('subcommand --help shows subcommand help', async () => {
+    const { output } = await serve(createHybrid(), ['info', '--help'])
+    expect(output).toContain('tool info')
+    expect(output).toContain('Show info')
+    expect(output).not.toContain('Commands:')
+  })
+})
+
 describe('edge cases', () => {
   test('command with only options (no args)', async () => {
     const { output } = await serve(createApp(), [

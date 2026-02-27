@@ -852,10 +852,10 @@ describe('cta', () => {
 })
 
 describe('leaf cli', () => {
-  test('create with run returns a leaf cli (no command method)', () => {
+  test('create with run returns a cli with command method', () => {
     const cli = Cli.create('ping', { run: () => ({ pong: true }) })
     expect(cli.name).toBe('ping')
-    expect('command' in cli).toBe(false)
+    expect('command' in cli).toBe(true)
   })
 
   test('serves without a command name in argv', async () => {

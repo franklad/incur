@@ -50,6 +50,8 @@ export declare namespace formatCommand {
     alias?: Record<string, string> | undefined
     /** Zod schema for positional arguments. */
     args?: z.ZodObject<any> | undefined
+    /** Subcommands to list (for CLIs with both a root handler and subcommands). */
+    commands?: { name: string; description?: string | undefined }[] | undefined
     /** A short description of what the command does. */
     description?: string | undefined
     /** Zod schema for environment variables. */
@@ -113,7 +115,8 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
     for (const line of usageLines.slice(1)) lines.push(`${pad}${line}`)
   } else {
     const synopsis = buildSynopsis(name, args)
-    lines.push(`Usage: ${synopsis}${opts ? ' [options]' : ''}`)
+    const commandSuffix = options.commands && options.commands.length > 0 ? ' | <command>' : ''
+    lines.push(`Usage: ${synopsis}${opts ? ' [options]' : ''}${commandSuffix}`)
   }
 
   // Arguments
@@ -183,6 +186,20 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
   if (hint) {
     lines.push('')
     lines.push(hint)
+  }
+
+  // Subcommands (for CLIs with both a root handler and subcommands)
+  const { commands } = options
+  if (commands && commands.length > 0) {
+    lines.push('')
+    lines.push('Commands:')
+    const maxLen = Math.max(...commands.map((c) => c.name.length))
+    for (const cmd of commands) {
+      if (cmd.description) {
+        const padding = ' '.repeat(maxLen - cmd.name.length)
+        lines.push(`  ${cmd.name}${padding}  ${cmd.description}`)
+      } else lines.push(`  ${cmd.name}`)
+    }
   }
 
   lines.push(...globalOptionsLines(root))
