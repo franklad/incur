@@ -173,10 +173,7 @@ function writeMeta(name: string, hash: string, skills: string[]) {
   const file = hashPath(name)
   const dir = path.dirname(file)
   if (!fsSync.existsSync(dir)) fsSync.mkdirSync(dir, { recursive: true })
-  fsSync.writeFileSync(
-    file,
-    JSON.stringify({ hash, skills, at: new Date().toISOString() }) + '\n',
-  )
+  fsSync.writeFileSync(file, JSON.stringify({ hash, skills, at: new Date().toISOString() }) + '\n')
 }
 
 /** @internal Reads the stored metadata for a CLI. */

@@ -271,25 +271,25 @@ export declare namespace create {
     /** The root command handler. When provided, creates a leaf CLI with no subcommands. */
     run?:
       | ((context: {
-         /** Whether the consumer is an agent (stdout is not a TTY). */
-         agent: boolean
-         /** Positional arguments. */
-         args: InferOutput<args>
-         /** Parsed environment variables. */
-         env: InferOutput<env>
-         /** Return an error result with optional CTAs. */
-         error: (options: {
-           code: string
-           cta?: CtaBlock | undefined
-           message: string
-           retryable?: boolean | undefined
-         }) => never
-         /** Return a success result with optional metadata (e.g. CTAs). */
-         ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
-         options: InferOutput<options>
-         /** Variables set by middleware. */
-         var: InferVars<vars>
-       }) =>
+          /** Whether the consumer is an agent (stdout is not a TTY). */
+          agent: boolean
+          /** Positional arguments. */
+          args: InferOutput<args>
+          /** Parsed environment variables. */
+          env: InferOutput<env>
+          /** Return an error result with optional CTAs. */
+          error: (options: {
+            code: string
+            cta?: CtaBlock | undefined
+            message: string
+            retryable?: boolean | undefined
+          }) => never
+          /** Return a success result with optional metadata (e.g. CTAs). */
+          ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
+          options: InferOutput<options>
+          /** Variables set by middleware. */
+          var: InferVars<vars>
+        }) =>
           | InferReturn<output>
           | Promise<InferReturn<output>>
           | AsyncGenerator<InferReturn<output>, unknown, unknown>)
@@ -675,7 +675,7 @@ async function serveImpl(
 
   // Resolve outputPolicy: command/group → CLI-level → default ('all')
   const effectiveOutputPolicy =
-    ('command' in resolved && resolved.outputPolicy) || options.outputPolicy
+    ('outputPolicy' in resolved && resolved.outputPolicy) || options.outputPolicy
   const renderOutput = !(human && !formatExplicit && effectiveOutputPolicy === 'agent-only')
 
   function write(output: Output) {
@@ -724,7 +724,9 @@ async function serveImpl(
   // Collect middleware: root CLI + groups traversed + per-command
   const allMiddleware = [
     ...(options.middlewares ?? []),
-    ...('middlewares' in resolved ? ((resolved as any).middlewares as MiddlewareHandler[]) ?? [] : []),
+    ...('middlewares' in resolved
+      ? (((resolved as any).middlewares as MiddlewareHandler[]) ?? [])
+      : []),
     ...((command.middleware as MiddlewareHandler[] | undefined) ?? []),
   ]
 
@@ -1585,8 +1587,8 @@ type CommandDefinition<
 > = {
   /** Map of option names to single-char aliases. */
   alias?: options extends z.ZodObject<any>
-  ? Partial<Record<keyof z.output<options>, string>>
-  : Record<string, string> | undefined
+    ? Partial<Record<keyof z.output<options>, string>>
+    : Record<string, string> | undefined
   /** Zod schema for positional arguments. */
   args?: args | undefined
   /** A short description of what the command does. */

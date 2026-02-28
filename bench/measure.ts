@@ -1,7 +1,8 @@
-import { encodingForModel } from 'js-tiktoken'
 import { encode as toonEncode } from '@toon-format/toon'
+import { encodingForModel } from 'js-tiktoken'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+
 import { Cli, Help, Schema, Skill } from '../src/index.js'
 import cli from './cli.js'
 
@@ -84,12 +85,15 @@ function measureMcp(commands: Map<string, CommandEntry>) {
   }))
 
   const perCommand: Record<string, number> = {}
-  for (const tool of tools)
-    perCommand[tool.name] = countTokens(JSON.stringify(tool))
+  for (const tool of tools) perCommand[tool.name] = countTokens(JSON.stringify(tool))
 
   const sessionStart = countTokens(JSON.stringify(tools))
-  const perCall = countTokens('{"name":"compute_instance_create","arguments":{"name":"web-1","zone":"us-east1-b"}}')
-  const perResponseEnvelope = countTokens('{"type":"tool_result","tool_use_id":"toolu_01A09q90qw90lq917835lq9"}')
+  const perCall = countTokens(
+    '{"name":"compute_instance_create","arguments":{"name":"web-1","zone":"us-east1-b"}}',
+  )
+  const perResponseEnvelope = countTokens(
+    '{"type":"tool_result","tool_use_id":"toolu_01A09q90qw90lq917835lq9"}',
+  )
 
   return { sessionStart, perCall, perResponseEnvelope, perCommand, toolCount: tools.length }
 }
@@ -156,18 +160,35 @@ function generateFixtures(): { name: string; data: Record<string, unknown> }[] {
     {
       name: 'instance-create (nested)',
       data: {
-        id: '8847291053', name: 'api-gateway-prod', status: 'RUNNING', zone: 'us-east1-b',
-        machineType: 'n2-standard-8', createdAt: '2025-06-15T14:22:10Z',
+        id: '8847291053',
+        name: 'api-gateway-prod',
+        status: 'RUNNING',
+        zone: 'us-east1-b',
+        machineType: 'n2-standard-8',
+        createdAt: '2025-06-15T14:22:10Z',
         disks: [
           { name: 'boot', sizeGb: 50, type: 'pd-ssd', boot: true },
           { name: 'data-vol', sizeGb: 500, type: 'pd-balanced', boot: false },
         ],
         networkInterfaces: [
-          { network: 'production-vpc', networkIP: '10.128.0.15', accessConfigs: [{ type: 'ONE_TO_ONE_NAT', natIP: '34.75.22.119' }] },
+          {
+            network: 'production-vpc',
+            networkIP: '10.128.0.15',
+            accessConfigs: [{ type: 'ONE_TO_ONE_NAT', natIP: '34.75.22.119' }],
+          },
           { network: 'internal-vpc', networkIP: '10.200.0.8', accessConfigs: [] },
         ],
-        labels: { environment: 'production', team: 'platform', service: 'api-gateway', cost_center: 'eng-infra' },
-        metadata: { 'startup-script': '#!/bin/bash\napt-get update && apt-get install -y nginx\nsystemctl start nginx', 'enable-oslogin': 'true' },
+        labels: {
+          environment: 'production',
+          team: 'platform',
+          service: 'api-gateway',
+          cost_center: 'eng-infra',
+        },
+        metadata: {
+          'startup-script':
+            '#!/bin/bash\napt-get update && apt-get install -y nginx\nsystemctl start nginx',
+          'enable-oslogin': 'true',
+        },
       },
     },
     {
@@ -183,29 +204,62 @@ function generateFixtures(): { name: string; data: Record<string, unknown> }[] {
           cpu: ['500m', '1', '250m', '2', '1'][i % 5],
           memory: ['512Mi', '1Gi', '256Mi', '2Gi', '1Gi'][i % 5],
           url: `https://svc-${i + 1}.run.app`,
-          lastDeployed: `2025-06-${String((i % 28) + 1).padStart(2, '0')}T${String((i % 24)).padStart(2, '0')}:30:00Z`,
+          lastDeployed: `2025-06-${String((i % 28) + 1).padStart(2, '0')}T${String(i % 24).padStart(2, '0')}:30:00Z`,
         })),
       },
     },
     {
       name: 'db-instance-create (deep nested)',
       data: {
-        name: 'analytics-primary', engine: 'postgres', version: '16.2',
-        tier: 'db-highmem-8', region: 'us-east1', status: 'RUNNING',
+        name: 'analytics-primary',
+        engine: 'postgres',
+        version: '16.2',
+        tier: 'db-highmem-8',
+        region: 'us-east1',
+        status: 'RUNNING',
         connectionName: 'myproject:us-east1:analytics-primary',
         ipAddresses: [
           { type: 'PRIMARY', address: '10.128.5.20' },
           { type: 'OUTGOING', address: '34.75.100.55' },
         ],
         settings: {
-          backupEnabled: true, backupWindow: '03:00-04:00',
-          maintenanceWindow: 'Sun:05:00', storageGb: 1000, ha: true,
-          flags: { max_connections: '500', shared_buffers: '4GB', effective_cache_size: '12GB', work_mem: '256MB', maintenance_work_mem: '1GB', random_page_cost: '1.1', log_min_duration_statement: '200' },
+          backupEnabled: true,
+          backupWindow: '03:00-04:00',
+          maintenanceWindow: 'Sun:05:00',
+          storageGb: 1000,
+          ha: true,
+          flags: {
+            max_connections: '500',
+            shared_buffers: '4GB',
+            effective_cache_size: '12GB',
+            work_mem: '256MB',
+            maintenance_work_mem: '1GB',
+            random_page_cost: '1.1',
+            log_min_duration_statement: '200',
+          },
         },
         replicas: [
-          { name: 'analytics-read-1', region: 'us-west1', tier: 'db-standard-4', status: 'RUNNING', lag: '0.2s' },
-          { name: 'analytics-read-2', region: 'eu-west1', tier: 'db-standard-4', status: 'RUNNING', lag: '45ms' },
-          { name: 'analytics-read-3', region: 'asia-east1', tier: 'db-standard-2', status: 'RUNNING', lag: '120ms' },
+          {
+            name: 'analytics-read-1',
+            region: 'us-west1',
+            tier: 'db-standard-4',
+            status: 'RUNNING',
+            lag: '0.2s',
+          },
+          {
+            name: 'analytics-read-2',
+            region: 'eu-west1',
+            tier: 'db-standard-4',
+            status: 'RUNNING',
+            lag: '45ms',
+          },
+          {
+            name: 'analytics-read-3',
+            region: 'asia-east1',
+            tier: 'db-standard-2',
+            status: 'RUNNING',
+            lag: '120ms',
+          },
         ],
         users: [
           { name: 'admin', role: 'cloudsqlsuperuser', databases: ['analytics', 'staging'] },
@@ -221,7 +275,8 @@ function generateFixtures(): { name: string; data: Record<string, unknown> }[] {
 
 function measureOutput() {
   const fixtures = generateFixtures()
-  const results: { name: string; json: number; toon: number; jsonStr: string; toonStr: string }[] = []
+  const results: { name: string; json: number; toon: number; jsonStr: string; toonStr: string }[] =
+    []
   for (const { name, data } of fixtures) {
     const jsonStr = JSON.stringify(data, null, 2)
     const toonStr = toonEncode(data)
@@ -307,14 +362,16 @@ async function main() {
   function renderTable(headers: string[], rows: string[][], separators: number[] = []): string[] {
     const cols = headers.length
     const widths = Array.from({ length: cols }, (_, i) =>
-      Math.max(headers[i]!.length, ...rows.map(r => r[i]!.length)),
+      Math.max(headers[i]!.length, ...rows.map((r) => r[i]!.length)),
     )
     const hr = (l: string, m: string, r: string) =>
-      l + widths.map(w => '─'.repeat(w + 2)).join(m) + r
+      l + widths.map((w) => '─'.repeat(w + 2)).join(m) + r
     const fmtRow = (cells: string[]) =>
-      '│' + cells.map((c, i) =>
-        i === 0 ? ` ${c.padEnd(widths[i]!)} ` : ` ${c.padStart(widths[i]!)} `,
-      ).join('│') + '│'
+      '│' +
+      cells
+        .map((c, i) => (i === 0 ? ` ${c.padEnd(widths[i]!)} ` : ` ${c.padStart(widths[i]!)} `))
+        .join('│') +
+      '│'
 
     const result = [hr('┌', '┬', '┐'), fmtRow(headers), hr('├', '┼', '┤')]
     for (let i = 0; i < rows.length; i++) {
@@ -363,13 +420,42 @@ async function main() {
     return `↓${(max / min).toFixed(1)}×`
   }
   const hdr = ['', 'MCP + JSON', 'One Skill + JSON', 'incur', 'incur vs best']
-  for (const l of renderTable(hdr, [
-    ['Session start', fmt(bkA.session), fmt(bkB.session), fmt(bkC.session), pct(bkA.session, bkB.session, bkC.session)],
-    ['Discovery', fmt(bkA.discovery), fmt(bkB.discovery), fmt(bkC.discovery), pct(bkA.discovery, bkB.discovery, bkC.discovery)],
-    [`Invocation (×${callsPerSession})`, fmt(bkA.invocation), fmt(bkB.invocation), fmt(bkC.invocation), pct(bkA.invocation, bkB.invocation, bkC.invocation)],
-    [`Response (×${callsPerSession})`, fmt(bkA.response), fmt(bkB.response), fmt(bkC.response), pct(bkA.response, bkB.response, bkC.response)],
-    ['Cost', usd4(costA), usd4(costB), usd4(costC), pct(costA, costB, costC)],
-  ], [3])) out(l)
+  for (const l of renderTable(
+    hdr,
+    [
+      [
+        'Session start',
+        fmt(bkA.session),
+        fmt(bkB.session),
+        fmt(bkC.session),
+        pct(bkA.session, bkB.session, bkC.session),
+      ],
+      [
+        'Discovery',
+        fmt(bkA.discovery),
+        fmt(bkB.discovery),
+        fmt(bkC.discovery),
+        pct(bkA.discovery, bkB.discovery, bkC.discovery),
+      ],
+      [
+        `Invocation (×${callsPerSession})`,
+        fmt(bkA.invocation),
+        fmt(bkB.invocation),
+        fmt(bkC.invocation),
+        pct(bkA.invocation, bkB.invocation, bkC.invocation),
+      ],
+      [
+        `Response (×${callsPerSession})`,
+        fmt(bkA.response),
+        fmt(bkB.response),
+        fmt(bkC.response),
+        pct(bkA.response, bkB.response, bkC.response),
+      ],
+      ['Cost', usd4(costA), usd4(costB), usd4(costC), pct(costA, costB, costC)],
+    ],
+    [3],
+  ))
+    out(l)
   out('```')
   out('')
 
@@ -385,9 +471,12 @@ async function main() {
       ...(entry.description ? { description: entry.description } : {}),
       inputSchema: buildToolSchema(entry),
     })),
-    null, 2,
+    null,
+    2,
   )
-  out(`**MCP** — ${fmt(mcp.sessionStart)} tokens (JSON tool schemas, all ${totalCommands} commands)`)
+  out(
+    `**MCP** — ${fmt(mcp.sessionStart)} tokens (JSON tool schemas, all ${totalCommands} commands)`,
+  )
   out('')
   for (const l of renderSnippet(mcpJson, 6)) out(l)
   out('')
@@ -401,10 +490,12 @@ async function main() {
   for (const l of renderSnippet(oneFileFm, 6)) out(l)
   out('')
 
-  const fmOnly = incur.files.map(f => {
-    const end = f.content.indexOf('\n---', 4)
-    return end === -1 ? f.content : f.content.slice(0, end + 4)
-  }).join('\n\n')
+  const fmOnly = incur.files
+    .map((f) => {
+      const end = f.content.indexOf('\n---', 4)
+      return end === -1 ? f.content : f.content.slice(0, end + 4)
+    })
+    .join('\n\n')
   out(`**incur** — ${fmt(incur.listing)} tokens (frontmatter, ${incur.files.length} files)`)
   out('')
   for (const l of renderSnippet(fmOnly, 6)) out(l)
@@ -417,7 +508,9 @@ async function main() {
   out(`**MCP** — 0 tokens (all schemas loaded at session start)`)
   out('')
 
-  out(`**One Skill** — ${fmt(oneFile.discovery)} tokens (reads full markdown, all ${totalCommands} commands)`)
+  out(
+    `**One Skill** — ${fmt(oneFile.discovery)} tokens (reads full markdown, all ${totalCommands} commands)`,
+  )
   out('')
   for (const l of renderSnippet(oneFile.content, 6)) out(l)
   out('')
@@ -432,7 +525,8 @@ async function main() {
   out('## Invocation (output tokens)')
   out('')
 
-  const mcpCall = '{"name":"compute_instance_create","arguments":{"name":"web-1","zone":"us-east1-b"}}'
+  const mcpCall =
+    '{"name":"compute_instance_create","arguments":{"name":"web-1","zone":"us-east1-b"}}'
   const cliCall = 'cloud compute instance-create web-1 --zone us-east1-b'
   out(`**MCP** — ${fmt(mcp.perCall)} tokens (JSON tool call)`)
   out('')
@@ -468,13 +562,29 @@ async function main() {
   const resultsDir = path.join(import.meta.dirname!, 'results')
   await fs.mkdir(resultsDir, { recursive: true })
   await fs.writeFile(path.join(resultsDir, 'report.md'), report)
-  await fs.writeFile(path.join(resultsDir, 'data.json'), JSON.stringify({
-    config: { commands: totalCommands, model: 'gpt-5.3-codex', inputPrice: 1.75, outputPrice: 14 },
-    mcp: { sessionStart: mcp.sessionStart, perCall: mcp.perCall, perCommand: mcp.perCommand },
-    oneFileSkill: { listing: oneFile.listing, discovery: oneFile.discovery, perCall: oneFile.perCall },
-    incur: { listing: incur.listing, helpAvg: incur.helpAvg, perCall: incur.perCall },
-    output: output.map(o => ({ name: o.name, json: o.json, toon: o.toon })),
-  }, null, 2) + '\n')
+  await fs.writeFile(
+    path.join(resultsDir, 'data.json'),
+    JSON.stringify(
+      {
+        config: {
+          commands: totalCommands,
+          model: 'gpt-5.3-codex',
+          inputPrice: 1.75,
+          outputPrice: 14,
+        },
+        mcp: { sessionStart: mcp.sessionStart, perCall: mcp.perCall, perCommand: mcp.perCommand },
+        oneFileSkill: {
+          listing: oneFile.listing,
+          discovery: oneFile.discovery,
+          perCall: oneFile.perCall,
+        },
+        incur: { listing: incur.listing, helpAvg: incur.helpAvg, perCall: incur.perCall },
+        output: output.map((o) => ({ name: o.name, json: o.json, toon: o.toon })),
+      },
+      null,
+      2,
+    ) + '\n',
+  )
 }
 
 main()

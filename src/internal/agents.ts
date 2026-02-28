@@ -24,29 +24,155 @@ const codexHome = process.env.CODEX_HOME?.trim() || path.join(home, '.codex')
 /** All known agent definitions. */
 export const all: Agent[] = [
   // Universal agents (project skillsDir = .agents/skills)
-  { name: 'Amp', globalSkillsDir: path.join(configHome, 'agents', 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(path.join(configHome, 'amp')) },
-  { name: 'Cline', globalSkillsDir: path.join(home, '.agents', 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(path.join(home, '.cline')) },
-  { name: 'Codex', globalSkillsDir: path.join(codexHome, 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(codexHome) },
-  { name: 'Cursor', globalSkillsDir: path.join(home, '.cursor', 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(path.join(home, '.cursor')) },
-  { name: 'Gemini CLI', globalSkillsDir: path.join(home, '.gemini', 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(path.join(home, '.gemini')) },
-  { name: 'GitHub Copilot', globalSkillsDir: path.join(home, '.copilot', 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(path.join(home, '.copilot')) },
-  { name: 'Kimi CLI', globalSkillsDir: path.join(configHome, 'agents', 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(path.join(home, '.kimi')) },
-  { name: 'OpenCode', globalSkillsDir: path.join(configHome, 'opencode', 'skills'), projectSkillsDir: '.agents/skills', universal: true, detect: () => fs.existsSync(path.join(configHome, 'opencode')) },
+  {
+    name: 'Amp',
+    globalSkillsDir: path.join(configHome, 'agents', 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(path.join(configHome, 'amp')),
+  },
+  {
+    name: 'Cline',
+    globalSkillsDir: path.join(home, '.agents', 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(path.join(home, '.cline')),
+  },
+  {
+    name: 'Codex',
+    globalSkillsDir: path.join(codexHome, 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(codexHome),
+  },
+  {
+    name: 'Cursor',
+    globalSkillsDir: path.join(home, '.cursor', 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(path.join(home, '.cursor')),
+  },
+  {
+    name: 'Gemini CLI',
+    globalSkillsDir: path.join(home, '.gemini', 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(path.join(home, '.gemini')),
+  },
+  {
+    name: 'GitHub Copilot',
+    globalSkillsDir: path.join(home, '.copilot', 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(path.join(home, '.copilot')),
+  },
+  {
+    name: 'Kimi CLI',
+    globalSkillsDir: path.join(configHome, 'agents', 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(path.join(home, '.kimi')),
+  },
+  {
+    name: 'OpenCode',
+    globalSkillsDir: path.join(configHome, 'opencode', 'skills'),
+    projectSkillsDir: '.agents/skills',
+    universal: true,
+    detect: () => fs.existsSync(path.join(configHome, 'opencode')),
+  },
 
   // Non-universal agents (need symlink from their skills dir to canonical)
-  { name: 'Claude Code', globalSkillsDir: path.join(claudeHome, 'skills'), projectSkillsDir: '.claude/skills', universal: false, detect: () => fs.existsSync(claudeHome) },
-  { name: 'Windsurf', globalSkillsDir: path.join(home, '.codeium', 'windsurf', 'skills'), projectSkillsDir: '.windsurf/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.codeium', 'windsurf')) },
-  { name: 'Continue', globalSkillsDir: path.join(home, '.continue', 'skills'), projectSkillsDir: '.continue/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.continue')) },
-  { name: 'Roo', globalSkillsDir: path.join(home, '.roo', 'skills'), projectSkillsDir: '.roo/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.roo')) },
-  { name: 'Kilo', globalSkillsDir: path.join(home, '.kilocode', 'skills'), projectSkillsDir: '.kilocode/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.kilocode')) },
-  { name: 'Goose', globalSkillsDir: path.join(configHome, 'goose', 'skills'), projectSkillsDir: '.goose/skills', universal: false, detect: () => fs.existsSync(path.join(configHome, 'goose')) },
-  { name: 'Augment', globalSkillsDir: path.join(home, '.augment', 'skills'), projectSkillsDir: '.augment/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.augment')) },
-  { name: 'Trae', globalSkillsDir: path.join(home, '.trae', 'skills'), projectSkillsDir: '.trae/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.trae')) },
-  { name: 'Junie', globalSkillsDir: path.join(home, '.junie', 'skills'), projectSkillsDir: '.junie/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.junie')) },
-  { name: 'Crush', globalSkillsDir: path.join(configHome, 'crush', 'skills'), projectSkillsDir: '.crush/skills', universal: false, detect: () => fs.existsSync(path.join(configHome, 'crush')) },
-  { name: 'Kiro CLI', globalSkillsDir: path.join(home, '.kiro', 'skills'), projectSkillsDir: '.kiro/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.kiro')) },
-  { name: 'Qwen Code', globalSkillsDir: path.join(home, '.qwen', 'skills'), projectSkillsDir: '.qwen/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.qwen')) },
-  { name: 'OpenHands', globalSkillsDir: path.join(home, '.openhands', 'skills'), projectSkillsDir: '.openhands/skills', universal: false, detect: () => fs.existsSync(path.join(home, '.openhands')) },
+  {
+    name: 'Claude Code',
+    globalSkillsDir: path.join(claudeHome, 'skills'),
+    projectSkillsDir: '.claude/skills',
+    universal: false,
+    detect: () => fs.existsSync(claudeHome),
+  },
+  {
+    name: 'Windsurf',
+    globalSkillsDir: path.join(home, '.codeium', 'windsurf', 'skills'),
+    projectSkillsDir: '.windsurf/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.codeium', 'windsurf')),
+  },
+  {
+    name: 'Continue',
+    globalSkillsDir: path.join(home, '.continue', 'skills'),
+    projectSkillsDir: '.continue/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.continue')),
+  },
+  {
+    name: 'Roo',
+    globalSkillsDir: path.join(home, '.roo', 'skills'),
+    projectSkillsDir: '.roo/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.roo')),
+  },
+  {
+    name: 'Kilo',
+    globalSkillsDir: path.join(home, '.kilocode', 'skills'),
+    projectSkillsDir: '.kilocode/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.kilocode')),
+  },
+  {
+    name: 'Goose',
+    globalSkillsDir: path.join(configHome, 'goose', 'skills'),
+    projectSkillsDir: '.goose/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(configHome, 'goose')),
+  },
+  {
+    name: 'Augment',
+    globalSkillsDir: path.join(home, '.augment', 'skills'),
+    projectSkillsDir: '.augment/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.augment')),
+  },
+  {
+    name: 'Trae',
+    globalSkillsDir: path.join(home, '.trae', 'skills'),
+    projectSkillsDir: '.trae/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.trae')),
+  },
+  {
+    name: 'Junie',
+    globalSkillsDir: path.join(home, '.junie', 'skills'),
+    projectSkillsDir: '.junie/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.junie')),
+  },
+  {
+    name: 'Crush',
+    globalSkillsDir: path.join(configHome, 'crush', 'skills'),
+    projectSkillsDir: '.crush/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(configHome, 'crush')),
+  },
+  {
+    name: 'Kiro CLI',
+    globalSkillsDir: path.join(home, '.kiro', 'skills'),
+    projectSkillsDir: '.kiro/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.kiro')),
+  },
+  {
+    name: 'Qwen Code',
+    globalSkillsDir: path.join(home, '.qwen', 'skills'),
+    projectSkillsDir: '.qwen/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.qwen')),
+  },
+  {
+    name: 'OpenHands',
+    globalSkillsDir: path.join(home, '.openhands', 'skills'),
+    projectSkillsDir: '.openhands/skills',
+    universal: false,
+    detect: () => fs.existsSync(path.join(home, '.openhands')),
+  },
 ]
 
 /** Detects which agents are installed on the system. */
@@ -62,10 +188,7 @@ export function detect(): Agent[] {
  * @param options - Installation options.
  * @returns Installed canonical paths.
  */
-export function install(
-  sourceDir: string,
-  options: install.Options = {},
-): install.Result {
+export function install(sourceDir: string, options: install.Options = {}): install.Result {
   const isGlobal = options.global !== false
   const cwd = options.cwd || process.cwd()
   const base = isGlobal ? home : cwd
@@ -89,7 +212,9 @@ export function install(
     // Create symlinks for non-universal agents
     for (const agent of detected) {
       if (agent.universal) continue
-      const agentSkillsDir = isGlobal ? agent.globalSkillsDir : path.join(cwd, agent.projectSkillsDir)
+      const agentSkillsDir = isGlobal
+        ? agent.globalSkillsDir
+        : path.join(cwd, agent.projectSkillsDir)
       const agentDir = path.join(agentSkillsDir, skill.name)
 
       // Skip if agent dir resolves to canonical (no symlink needed)
@@ -195,8 +320,7 @@ function discoverSkills(rootDir: string): { name: string; dir: string; root?: bo
     const content = fs.readFileSync(rootSkill, 'utf8')
     const nameMatch = content.match(/^name:\s*(.+)$/m)
     const name = sanitizeName(nameMatch?.[1] ?? 'skill')
-    if (!results.some((r) => r.name === name))
-      results.push({ name, dir: rootDir, root: true })
+    if (!results.some((r) => r.name === name)) results.push({ name, dir: rootDir, root: true })
   }
 
   return results
@@ -204,11 +328,7 @@ function discoverSkills(rootDir: string): { name: string; dir: string; root?: bo
 
 /** Sanitizes a skill name for use as a directory name. */
 function sanitizeName(name: string): string {
-  return name
-    .trim()
-    .replace(/[/\\]/g, '-')
-    .replace(/\.\./g, '')
-    .slice(0, 255)
+  return name.trim().replace(/[/\\]/g, '-').replace(/\.\./g, '').slice(0, 255)
 }
 
 /** Removes a file, directory, or symlink (including broken symlinks). */

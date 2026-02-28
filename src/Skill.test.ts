@@ -237,7 +237,9 @@ describe('split', () => {
 
   test('depth 1 without group descriptions uses child descriptions', () => {
     const files = Skill.split('gh', commands, 1)
-    expect(files[0]!.content).toContain('description: Log in, Check status. Run `gh auth --help` for usage details.')
+    expect(files[0]!.content).toContain(
+      'description: Log in, Check status. Run `gh auth --help` for usage details.',
+    )
   })
 
   test('depth 2 groups by first two segments', () => {
