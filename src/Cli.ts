@@ -15,7 +15,10 @@ import * as SyncMcp from './SyncMcp.js'
 import * as SyncSkills from './SyncSkills.js'
 
 /** A CLI application instance. Also used as a command group when mounted on a parent CLI. */
-export type Cli<commands extends CommandsMap = {}> = {
+export type Cli<
+  commands extends CommandsMap = {},
+  vars extends z.ZodObject<any> | undefined = undefined,
+> = {
   /** Registers a root command or mounts a sub-CLI as a command group. */
   command: {
     /** Registers a command. Returns the CLI instance for chaining. */
@@ -27,12 +30,15 @@ export type Cli<commands extends CommandsMap = {}> = {
       const output extends z.ZodType | undefined = undefined,
     >(
       name: name,
-      definition: CommandDefinition<args, env, options, output>,
-    ): Cli<commands & { [key in name]: { args: InferOutput<args>; options: InferOutput<options> } }>
+      definition: CommandDefinition<args, env, options, output, vars>,
+    ): Cli<
+      commands & { [key in name]: { args: InferOutput<args>; options: InferOutput<options> } },
+      vars
+    >
     /** Mounts a sub-CLI as a command group. */
     <const name extends string, const sub extends CommandsMap>(
-      cli: Cli<sub> & { name: name },
-    ): Cli<commands & { [key in keyof sub & string as `${name} ${key}`]: sub[key] }>
+      cli: Cli<sub, any> & { name: name },
+    ): Cli<commands & { [key in keyof sub & string as `${name} ${key}`]: sub[key] }, vars>
     /** Mounts a root CLI as a single command. */
     <
       const name extends string,
@@ -40,7 +46,10 @@ export type Cli<commands extends CommandsMap = {}> = {
       const opts extends z.ZodObject<any> | undefined,
     >(
       cli: Root<args, opts> & { name: name },
-    ): Cli<commands & { [key in name]: { args: InferOutput<args>; options: InferOutput<opts> } }>
+    ): Cli<
+      commands & { [key in name]: { args: InferOutput<args>; options: InferOutput<opts> } },
+      vars
+    >
   }
   /** A short description of the CLI. */
   description?: string | undefined
@@ -48,6 +57,8 @@ export type Cli<commands extends CommandsMap = {}> = {
   name: string
   /** Parses argv, runs the matched command, and writes the output envelope to stdout. */
   serve(argv?: string[], options?: serve.Options): Promise<void>
+  /** Registers middleware that runs around every command. */
+  use(handler: MiddlewareHandler<vars>): Cli<commands, vars>
 }
 
 /** Root CLI — a single command with no subcommands. Carries phantom generics for mounting inference. */
@@ -109,35 +120,42 @@ export function create<
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
+  const vars extends z.ZodObject<any> | undefined = undefined,
 >(
   name: string,
-  definition: create.Options<args, env, opts, output> & { run: Function },
-): Cli<{ [key in typeof name]: { args: InferOutput<args>; options: InferOutput<opts> } }>
+  definition: create.Options<args, env, opts, output, vars> & { run: Function },
+): Cli<{ [key in typeof name]: { args: InferOutput<args>; options: InferOutput<opts> } }, vars>
 /** Creates a router CLI that registers subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
->(name: string, definition?: create.Options<args, env, opts, output>): Cli
+  const vars extends z.ZodObject<any> | undefined = undefined,
+>(name: string, definition?: create.Options<args, env, opts, output, vars>): Cli<{}, vars>
 /** Creates a CLI with a root handler from a single options object. Can still register subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
+  const vars extends z.ZodObject<any> | undefined = undefined,
 >(
-  definition: create.Options<args, env, opts, output> & { name: string; run: Function },
-): Cli<{
-  [key in (typeof definition)['name']]: { args: InferOutput<args>; options: InferOutput<opts> }
-}>
+  definition: create.Options<args, env, opts, output, vars> & { name: string; run: Function },
+): Cli<
+  {
+    [key in (typeof definition)['name']]: { args: InferOutput<args>; options: InferOutput<opts> }
+  },
+  vars
+>
 /** Creates a router CLI from a single options object (e.g. package.json). */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
->(definition: create.Options<args, env, opts, output> & { name: string }): Cli
+  const vars extends z.ZodObject<any> | undefined = undefined,
+>(definition: create.Options<args, env, opts, output, vars> & { name: string }): Cli<{}, vars>
 export function create(
   nameOrDefinition: string | (any & { name: string }),
   definition?: any,
@@ -147,6 +165,7 @@ export function create(
   const rootDef = 'run' in def ? (def as CommandDefinition<any, any, any>) : undefined
 
   const commands = new Map<string, CommandEntry>()
+  const middlewares: MiddlewareHandler[] = []
 
   const cli: Cli = {
     name,
@@ -165,11 +184,13 @@ export function create(
       const sub = nameOrCli as Cli
       const subCommands = toCommands.get(sub)!
       const subOutputPolicy = toOutputPolicy.get(sub)
+      const subMiddlewares = toMiddlewares.get(sub)
       commands.set(sub.name, {
         _group: true,
         description: sub.description,
         commands: subCommands,
         ...(subOutputPolicy ? { outputPolicy: subOutputPolicy } : undefined),
+        ...(subMiddlewares?.length ? { middlewares: subMiddlewares } : undefined),
       })
       return cli
     },
@@ -180,16 +201,24 @@ export function create(
         description: def.description,
         format: def.format,
         mcp: def.mcp,
+        middlewares,
         outputPolicy: def.outputPolicy,
         rootCommand: rootDef,
         sync: def.sync,
+        vars: def.vars,
         version: def.version,
       })
+    },
+
+    use(handler: MiddlewareHandler): any {
+      middlewares.push(handler)
+      return cli
     },
   }
 
   if (rootDef) toRootDefinition.set(cli as unknown as Root, rootDef)
   if (def.outputPolicy) toOutputPolicy.set(cli, def.outputPolicy)
+  toMiddlewares.set(cli, middlewares)
   toCommands.set(cli, commands)
   return cli
 }
@@ -201,6 +230,7 @@ export declare namespace create {
     env extends z.ZodObject<any> | undefined = undefined,
     options extends z.ZodObject<any> | undefined = undefined,
     output extends z.ZodType | undefined = undefined,
+    vars extends z.ZodObject<any> | undefined = undefined,
   > = {
     /** Map of option names to single-char aliases. */
     alias?: options extends z.ZodObject<any>
@@ -231,6 +261,8 @@ export declare namespace create {
     outputPolicy?: OutputPolicy | undefined
     /** Alternative usage patterns shown in help output. */
     usage?: Usage<args, options>[] | undefined
+    /** Zod schema for middleware variables. Keys define variable names, schemas define types and defaults. */
+    vars?: vars | undefined
     /** The root command handler. When provided, creates a leaf CLI with no subcommands. */
     run?:
       | ((context: {
@@ -250,6 +282,8 @@ export declare namespace create {
          /** Return a success result with optional metadata (e.g. CTAs). */
          ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
          options: InferOutput<options>
+         /** Variables set by middleware. */
+         var: InferVars<vars>
        }) =>
           | InferReturn<output>
           | Promise<InferReturn<output>>
@@ -682,7 +716,16 @@ async function serveImpl(
 
   const { command, path, rest } = effective
 
-  try {
+  // Collect middleware: root CLI + groups traversed
+  const allMiddleware = [
+    ...(options.middlewares ?? []),
+    ...('middlewares' in resolved ? ((resolved as any).middlewares as MiddlewareHandler[]) ?? [] : []),
+  ]
+
+  // Initialize vars from schema defaults
+  const varsMap: Record<string, unknown> = options.vars ? options.vars.parse({}) : {}
+
+  const runCommand = async () => {
     const { args, options: parsedOptions } = Parser.parse(rest, {
       alias: command.alias as Record<string, string> | undefined,
       args: command.args,
@@ -711,6 +754,7 @@ async function serveImpl(
       options: parsedOptions,
       ok: okFn,
       error: errorFn,
+      var: varsMap,
     })
 
     // Streaming path — async generator
@@ -770,6 +814,28 @@ async function serveImpl(
           duration: `${Math.round(performance.now() - start)}ms`,
         },
       })
+    }
+  }
+
+  try {
+    if (allMiddleware.length > 0) {
+      const mwCtx: MiddlewareContext = {
+        agent: !human,
+        command: path,
+        set(key: string, value: unknown) {
+          varsMap[key] = value
+        },
+        var: varsMap,
+      }
+      const composed = allMiddleware.reduceRight(
+        (next: () => Promise<void>, mw) => async () => {
+          await mw(mwCtx, next)
+        },
+        runCommand,
+      )
+      await composed()
+    } else {
+      await runCommand()
     }
   } catch (error) {
     const errorOutput: Output = {
@@ -835,6 +901,7 @@ function resolveCommand(
 ):
   | {
       command: CommandDefinition<any, any, any>
+      middlewares: MiddlewareHandler[]
       outputPolicy?: OutputPolicy | undefined
       path: string
       rest: string[]
@@ -854,9 +921,11 @@ function resolveCommand(
   const path = [first]
   let remaining = rest
   let inheritedOutputPolicy: OutputPolicy | undefined
+  const collectedMiddlewares: MiddlewareHandler[] = []
 
   while (isGroup(entry)) {
     if (entry.outputPolicy) inheritedOutputPolicy = entry.outputPolicy
+    if (entry.middlewares) collectedMiddlewares.push(...entry.middlewares)
     const next = remaining[0]
     if (!next)
       return {
@@ -879,6 +948,7 @@ function resolveCommand(
   const outputPolicy = entry.outputPolicy ?? inheritedOutputPolicy
   return {
     command: entry,
+    middlewares: collectedMiddlewares,
     path: path.join(' '),
     rest: remaining,
     ...(outputPolicy ? { outputPolicy } : undefined),
@@ -891,6 +961,8 @@ declare namespace serveImpl {
     description?: string | undefined
     /** CLI-level default output format. */
     format?: Formatter.Format | undefined
+    /** Middleware handlers registered on the root CLI. */
+    middlewares?: MiddlewareHandler[] | undefined
     /** CLI-level default output policy. */
     outputPolicy?: OutputPolicy | undefined
     mcp?:
@@ -909,6 +981,8 @@ declare namespace serveImpl {
           suggestions?: string[] | undefined
         }
       | undefined
+    /** Zod schema for middleware variables. */
+    vars?: z.ZodObject<any> | undefined
     version?: string | undefined
   }
 }
@@ -972,6 +1046,7 @@ export type OutputPolicy = 'agent-only' | 'all'
 type InternalGroup = {
   _group: true
   description?: string | undefined
+  middlewares?: MiddlewareHandler[] | undefined
   outputPolicy?: OutputPolicy | undefined
   commands: Map<string, CommandEntry>
 }
@@ -983,6 +1058,9 @@ function isGroup(entry: CommandEntry): entry is InternalGroup {
 
 /** @internal Maps CLI instances to their command maps. */
 export const toCommands = new WeakMap<Cli, Map<string, CommandEntry>>()
+
+/** @internal Maps CLI instances to their middleware arrays. */
+const toMiddlewares = new WeakMap<Cli, MiddlewareHandler[]>()
 
 /** @internal Maps root CLI instances to their command definitions. */
 const toRootDefinition = new WeakMap<Root, CommandDefinition<any, any, any>>()
@@ -1445,6 +1523,28 @@ type InferReturn<output extends z.ZodType | undefined> = output extends z.ZodTyp
   ? z.output<output>
   : unknown
 
+/** @internal Inferred vars type from a Zod schema, or `{}` when no schema is provided. */
+type InferVars<vars extends z.ZodObject<any> | undefined> =
+  vars extends z.ZodObject<any> ? z.output<vars> : {}
+
+/** Middleware handler that runs before/after command execution. */
+export type MiddlewareHandler<vars extends z.ZodObject<any> | undefined = undefined> = (
+  context: MiddlewareContext<vars>,
+  next: () => Promise<void>,
+) => Promise<void> | void
+
+/** Context available inside middleware. */
+type MiddlewareContext<vars extends z.ZodObject<any> | undefined = undefined> = {
+  /** Whether the consumer is an agent (stdout is not a TTY). */
+  agent: boolean
+  /** The resolved command path. */
+  command: string
+  /** Set a typed variable for downstream middleware and handlers. */
+  set<key extends string & keyof InferVars<vars>>(key: key, value: InferVars<vars>[key]): void
+  /** Variables set by upstream middleware. */
+  var: InferVars<vars>
+}
+
 /** @internal The output envelope written to stdout. */
 type Output = OneOf<
   | {
@@ -1493,6 +1593,7 @@ type CommandDefinition<
   env extends z.ZodObject<any> | undefined = undefined,
   options extends z.ZodObject<any> | undefined = undefined,
   output extends z.ZodType | undefined = undefined,
+  vars extends z.ZodObject<any> | undefined = undefined,
 > = {
   /** Map of option names to single-char aliases. */
   alias?: options extends z.ZodObject<any>
@@ -1543,6 +1644,8 @@ type CommandDefinition<
     /** Return a success result with optional metadata (e.g. CTAs). */
     ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
     options: InferOutput<options>
+    /** Variables set by middleware. */
+    var: InferVars<vars>
   }):
     | InferReturn<output>
     | Promise<InferReturn<output>>

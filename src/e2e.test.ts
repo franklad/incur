@@ -1568,6 +1568,111 @@ describe('skills staleness', () => {
   })
 })
 
+describe('middleware', () => {
+  test('onion execution order around handler', async () => {
+    const { cli, order } = createMiddlewareApp()
+    const { output } = await serve(cli, ['ping'])
+    expect(output).toContain('pong: true')
+    expect(order).toEqual(['root-mw:before', 'ping-handler', 'root-mw:after'])
+  })
+
+  test('vars: defaults initialize, middleware overrides with set()', async () => {
+    const { cli } = createMiddlewareApp()
+    const { output } = await serve(cli, ['whoami'])
+    expect(output).toMatchInlineSnapshot(`
+      "user: alice
+      requestId: req-default
+      "
+    `)
+  })
+
+  test('vars: verbose envelope includes var data', async () => {
+    const { cli } = createMiddlewareApp()
+    const { output } = await serve(cli, ['whoami', '--verbose', '--format', 'json'])
+    const parsed = json(output)
+    expect(parsed.data.user).toBe('alice')
+    expect(parsed.data.requestId).toBe('req-default')
+  })
+
+  test('group-scoped middleware runs after root middleware', async () => {
+    const { cli, order } = createMiddlewareApp()
+    order.length = 0
+    await serve(cli, ['admin', 'reset'])
+    expect(order).toEqual(['root-mw:before', 'admin-mw', 'reset-handler', 'root-mw:after'])
+  })
+
+  test('group middleware does not run for non-group commands', async () => {
+    const { cli, order } = createMiddlewareApp()
+    order.length = 0
+    await serve(cli, ['ping'])
+    expect(order).not.toContain('admin-mw')
+  })
+
+  test('middleware wraps streaming handlers', async () => {
+    const { cli, order } = createMiddlewareApp()
+    order.length = 0
+    const { output } = await serve(cli, ['stream'])
+    expect(output).toContain('n: 1')
+    expect(output).toContain('n: 2')
+    expect(order).toEqual(['root-mw:before', 'stream:1', 'stream:2', 'root-mw:after'])
+  })
+
+  test('middleware errors propagate as command errors', async () => {
+    const { cli } = createMiddlewareApp()
+    const { output, exitCode } = await serve(cli, ['explode'])
+    expect(exitCode).toBe(1)
+    expect(output).toContain('BOOM')
+    expect(output).toContain('kaboom')
+  })
+
+  test('middleware does not run for --help', async () => {
+    const { cli, order } = createMiddlewareApp()
+    order.length = 0
+    await serve(cli, ['--help'])
+    expect(order).toEqual([])
+  })
+
+  test('middleware does not run for --llms', async () => {
+    const { cli, order } = createMiddlewareApp()
+    order.length = 0
+    await serve(cli, ['--llms'])
+    expect(order).toEqual([])
+  })
+
+  test('middleware does not run for --version', async () => {
+    const { cli, order } = createMiddlewareApp()
+    order.length = 0
+    await serve(cli, ['--version'])
+    expect(order).toEqual([])
+  })
+
+  test('middleware does not run for command --help', async () => {
+    const { cli, order } = createMiddlewareApp()
+    order.length = 0
+    await serve(cli, ['ping', '--help'])
+    expect(order).toEqual([])
+  })
+
+  test('short-circuit: middleware that does not call next() prevents handler', async () => {
+    const order: string[] = []
+    const cli = Cli.create('app')
+      .use(async (_c, _next) => {
+        order.push('gate')
+        // intentionally not calling next()
+      })
+      .command('deploy', {
+        run() {
+          order.push('handler')
+          return { deployed: true }
+        },
+      })
+
+    const { output } = await serve(cli, ['deploy'])
+    expect(order).toEqual(['gate'])
+    expect(output).toBe('')
+  })
+})
+
 async function serve(
   cli: { serve: Cli.Cli['serve'] },
   argv: string[],
@@ -1594,6 +1699,70 @@ async function serve(
 
 function json(raw: string) {
   return JSON.parse(raw)
+}
+
+function createMiddlewareApp() {
+  const order: string[] = []
+
+  const admin = Cli.create('admin', { description: 'Admin commands' })
+    .use(async (_c, next) => {
+      order.push('admin-mw')
+      await next()
+    })
+    .command('reset', {
+      description: 'Reset database',
+      run() {
+        order.push('reset-handler')
+        return { reset: true }
+      },
+    })
+
+  const cli = Cli.create('app', {
+    description: 'Middleware test app',
+    version: '1.0.0',
+    vars: z.object({
+      user: z.string().default('anon'),
+      requestId: z.string().default(() => 'req-default'),
+    }),
+  })
+    .use(async (c, next) => {
+      order.push('root-mw:before')
+      c.set('user', 'alice')
+      await next()
+      order.push('root-mw:after')
+    })
+    .command('whoami', {
+      description: 'Show current user',
+      run(c) {
+        order.push('whoami-handler')
+        return { user: c.var.user, requestId: c.var.requestId }
+      },
+    })
+    .command('ping', {
+      description: 'Health check',
+      run() {
+        order.push('ping-handler')
+        return { pong: true }
+      },
+    })
+    .command('explode', {
+      description: 'Always fails',
+      run() {
+        throw new Errors.IncurError({ code: 'BOOM', message: 'kaboom' })
+      },
+    })
+    .command('stream', {
+      description: 'Stream chunks',
+      async *run() {
+        order.push('stream:1')
+        yield { n: 1 }
+        order.push('stream:2')
+        yield { n: 2 }
+      },
+    })
+    .command(admin)
+
+  return { cli, order }
 }
 
 function createApp() {

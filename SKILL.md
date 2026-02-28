@@ -588,6 +588,89 @@ sub.command('sync', { run: () => ({ synced: true }) }) // inherits agent-only
 sub.command('status', { outputPolicy: 'all', run: () => ({}) }) // overrides
 ```
 
+## Middleware
+
+Register composable before/after hooks with `cli.use()`. Middleware executes in registration order, onion-style. Each calls `await next()` to proceed.
+
+```ts
+const cli = Cli.create('deploy-cli', { description: 'Deploy tools' })
+  .use(async (c, next) => {
+    const start = Date.now()
+    await next()
+    console.log(`took ${Date.now() - start}ms`)
+  })
+  .command('deploy', {
+    run() {
+      return { deployed: true }
+    },
+  })
+```
+
+```sh
+$ deploy-cli deploy
+# → deployed: true
+# took 12ms
+```
+
+Middleware on a sub-CLI only applies to its commands:
+
+```ts
+const admin = Cli.create('admin', { description: 'Admin commands' })
+  .use(async (c, next) => {
+    if (!isAdmin()) throw new Error('forbidden')
+    await next()
+  })
+  .command('reset', { run: () => ({ reset: true }) })
+
+cli.command(admin) // middleware only runs for `my-cli admin reset`
+```
+
+```sh
+$ my-cli admin reset
+# → reset: true
+
+$ my-cli other-cmd
+# middleware does not run
+```
+
+### Vars — typed dependency injection
+
+Declare a `vars` schema on `create()` to inject typed variables. Middleware sets them with `c.set()`, handlers read them via `c.var`. Use `.default()` for vars that don't need middleware:
+
+```ts
+const cli = Cli.create('my-cli', {
+  description: 'My CLI',
+  vars: z.object({
+    user: z.custom<{ id: string; name: string }>(),
+    requestId: z.string(),
+    debug: z.boolean().default(false),
+  }),
+})
+
+cli.use(async (c, next) => {
+  c.set('user', await authenticate())
+  c.set('requestId', crypto.randomUUID())
+  await next()
+})
+
+cli.command('whoami', {
+  run(c) {
+    return { user: c.var.user, requestId: c.var.requestId, debug: c.var.debug }
+  },
+})
+```
+
+```sh
+$ my-cli whoami
+# → user:
+# →   id: u_123
+# →   name: Alice
+# → requestId: 550e8400-e29b-41d4-a716-446655440000
+# → debug: false
+```
+
+Middleware does **not** run for built-in commands (`--help`, `--llms`, `--mcp`, `mcp add`, `skills add`).
+
 ## Serving
 
 Call `.serve()` to parse `process.argv` and run:

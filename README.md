@@ -21,6 +21,7 @@
 - [**Inferred types**](#inferred-types): generic type flow from schemas to `run` callbacks with zero manual annotations
 - [**Global options**](#global-options): `--format`, `--json`, `--verbose`, `--help`, `--version` on every CLI for free
 - [**Light API surface**](#light-api-surface): `Cli.create()`, `.command()`, `.serve()` – that's it
+- [**Middleware**](#middleware): composable before/after hooks with typed dependency injection via `cli.use()`
 
 ## Quickprompt
 
@@ -482,6 +483,68 @@ cli.command('deploy', {
     return { url: `https://${c.args.env}.example.com` }
   },
 })
+```
+
+### Middleware
+
+Register composable before/after hooks with `cli.use()`. Middleware executes in registration order, onion-style – each calls `await next()` to proceed to the next middleware or the command handler.
+
+```ts
+const cli = Cli.create('deploy-cli', { description: 'Deploy tools' })
+  .use(async (c, next) => {
+    const start = Date.now()
+    await next()
+    console.log(`took ${Date.now() - start}ms`)
+  })
+  .command('deploy', {
+    run() {
+      return { deployed: true }
+    },
+  })
+```
+
+```sh
+$ deploy-cli deploy
+# → deployed: true
+# took 12ms
+```
+
+### Variables
+
+Declare a `vars` schema on `create()` to enable typed variables. Middleware sets them with `c.set()`, and both middleware and command handlers read them via `c.var`. Use `.default()` for vars that don't need middleware:
+
+```ts
+type User = { id: string; name: string }
+
+const cli = Cli.create('my-cli', {
+  description: 'My CLI',
+  vars: z.object({
+    user: z.custom<User>(),
+    requestId: z.string(),
+    debug: z.boolean().default(true),
+  }),
+})
+
+cli.use(async (c, next) => {
+  c.set('user', await authenticate())
+  c.set('requestId', crypto.randomUUID())
+  await next()
+})
+
+cli.command('whoami', {
+  run(c) {
+    return { user: c.var.user, requestId: c.var.requestId, debug: c.var.debug }
+  },
+})
+```
+
+```sh
+$ my-cli whoami
+# → user:
+# →   id: u_123
+# →   name: Alice
+# → requestId: 550e8400-e29b-41d4-a716-446655440000
+# → debug: true
 ```
 
 ### Global options

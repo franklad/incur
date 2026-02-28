@@ -1750,6 +1750,167 @@ describe('outputPolicy', () => {
     expect(migrate.output).toContain('migrated: 3')
   })
 
+  test('e2e: middleware runs in order around handler', async () => {
+    const order: string[] = []
+    const cli = Cli.create('test')
+      .use(async (_c, next) => {
+        order.push('mw1:before')
+        await next()
+        order.push('mw1:after')
+      })
+      .use(async (_c, next) => {
+        order.push('mw2:before')
+        await next()
+        order.push('mw2:after')
+      })
+      .command('ping', {
+        run() {
+          order.push('handler')
+          return { pong: true }
+        },
+      })
+
+    const { output } = await serve(cli, ['ping'])
+    expect(output).toContain('pong: true')
+    expect(order).toEqual(['mw1:before', 'mw2:before', 'handler', 'mw2:after', 'mw1:after'])
+  })
+
+  test('e2e: middleware can short-circuit by not calling next', async () => {
+    const cli = Cli.create('test')
+      .use(async (_c, _next) => {
+        throw new Errors.IncurError({ code: 'FORBIDDEN', message: 'nope' })
+      })
+      .command('deploy', {
+        run() {
+          return { deployed: true }
+        },
+      })
+
+    const { output, exitCode } = await serve(cli, ['deploy'])
+    expect(output).toContain('FORBIDDEN')
+    expect(output).toContain('nope')
+    expect(exitCode).toBe(1)
+  })
+
+  test('e2e: group-scoped middleware only runs for group commands', async () => {
+    const order: string[] = []
+    const admin = Cli.create('admin', { description: 'Admin' })
+      .use(async (_c, next) => {
+        order.push('admin-mw')
+        await next()
+      })
+      .command('reset', {
+        run() {
+          return { reset: true }
+        },
+      })
+
+    const cli = Cli.create('test')
+      .use(async (_c, next) => {
+        order.push('root-mw')
+        await next()
+      })
+      .command('ping', { run: () => ({ pong: true }) })
+      .command(admin)
+
+    // Group command: both root + admin middleware run
+    order.length = 0
+    await serve(cli, ['admin', 'reset'])
+    expect(order).toEqual(['root-mw', 'admin-mw'])
+
+    // Non-group command: only root middleware runs
+    order.length = 0
+    await serve(cli, ['ping'])
+    expect(order).toEqual(['root-mw'])
+  })
+
+  test('e2e: vars with defaults and middleware set()', async () => {
+    const cli = Cli.create('test', {
+      vars: z.object({
+        requestId: z.string().default('default-id'),
+        user: z.string().default('anon'),
+      }),
+    })
+      .use(async (c, next) => {
+        c.set('user', 'alice')
+        await next()
+      })
+      .command('whoami', {
+        run(c) {
+          return { user: c.var.user, requestId: c.var.requestId }
+        },
+      })
+
+    const { output } = await serve(cli, ['whoami'])
+    expect(output).toContain('user: alice')
+    expect(output).toContain('requestId: default-id')
+  })
+
+  test('e2e: middleware does not run for --help', async () => {
+    let middlewareRan = false
+    const cli = Cli.create('test')
+      .use(async (_c, next) => {
+        middlewareRan = true
+        await next()
+      })
+      .command('ping', { description: 'Ping', run: () => ({ pong: true }) })
+
+    await serve(cli, ['--help'])
+    expect(middlewareRan).toBe(false)
+
+    await serve(cli, ['ping', '--help'])
+    expect(middlewareRan).toBe(false)
+  })
+
+  test('e2e: middleware context has correct agent and command', async () => {
+    let captured: { agent: boolean; command: string } | undefined
+    const cli = Cli.create('test')
+      .use(async (c, next) => {
+        captured = { agent: c.agent, command: c.command }
+        await next()
+      })
+      .command('deploy', { run: () => ({ ok: true }) })
+
+    await serve(cli, ['deploy'])
+    expect(captured).toEqual({ agent: false, command: 'deploy' })
+  })
+
+  test('e2e: middleware works with streaming handlers', async () => {
+    const order: string[] = []
+    const cli = Cli.create('test')
+      .use(async (_c, next) => {
+        order.push('before')
+        await next()
+        order.push('after')
+      })
+      .command('stream', {
+        async *run() {
+          order.push('chunk1')
+          yield { n: 1 }
+          order.push('chunk2')
+          yield { n: 2 }
+        },
+      })
+
+    const { output } = await serve(cli, ['stream'])
+    expect(output).toContain('n: 1')
+    expect(output).toContain('n: 2')
+    expect(order).toEqual(['before', 'chunk1', 'chunk2', 'after'])
+  })
+
+  test('e2e: middleware errors propagate through catch', async () => {
+    const cli = Cli.create('test')
+      .use(async (_c, next) => {
+        await next()
+        throw new Error('after-error')
+      })
+      .command('ping', { run: () => ({ pong: true }) })
+
+    const { output, exitCode } = await serve(cli, ['ping'])
+    expect(output).toContain('after-error')
+    expect(exitCode).toBe(1)
+  })
+
   test('e2e: agent-only with streaming and error in nested group', async () => {
     const cli = Cli.create('tool')
     const ops = Cli.create('ops', {

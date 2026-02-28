@@ -114,6 +114,38 @@ test('Cta narrows strings and objects to registered commands', () => {
   expectTypeOf<{ command: 'list'; options: { limit: 10 } }>().toMatchTypeOf<Cta>()
 })
 
+test('vars are typed in run context', () => {
+  Cli.create('test', {
+    vars: z.object({ user: z.string(), count: z.number().default(0) }),
+  }).command('check', {
+    run(c) {
+      expectTypeOf(c.var.user).toEqualTypeOf<string>()
+      expectTypeOf(c.var.count).toEqualTypeOf<number>()
+      return {}
+    },
+  })
+})
+
+test('vars are typed in middleware set()', () => {
+  Cli.create('test', {
+    vars: z.object({ user: z.string() }),
+  }).use((c, _next) => {
+    // valid key
+    c.set('user', 'alice')
+    // @ts-expect-error — 'unknown' is not a declared var key
+    c.set('unknown', 'value')
+  })
+})
+
+test('without vars, c.var is empty object', () => {
+  Cli.create('test').command('ping', {
+    run(c) {
+      expectTypeOf(c.var).toEqualTypeOf<{}>()
+      return {}
+    },
+  })
+})
+
 test('command() accumulates command types through chaining', () => {
   const cli = Cli.create('test')
     .command('get', {
