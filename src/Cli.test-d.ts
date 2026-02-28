@@ -1,4 +1,5 @@
-import { Cli, z } from 'incur'
+import { Cli, middleware, z } from 'incur'
+import type { MiddlewareHandler } from 'incur'
 import { expectTypeOf, test } from 'vitest'
 
 test('args in run() infers from args schema', () => {
@@ -164,4 +165,26 @@ test('command() accumulates command types through chaining', () => {
     options: { verbose: boolean }
   }>()
   expectTypeOf<Commands['list']>().toEqualTypeOf<{ args: {}; options: { limit: number } }>()
+})
+
+test('middleware<typeof cli.vars>() infers vars types', () => {
+  const cli = Cli.create('test', {
+    vars: z.object({ user: z.string(), count: z.number() }),
+  })
+
+  const mw = middleware<typeof cli.vars>((c, _next) => {
+    expectTypeOf(c.var.user).toEqualTypeOf<string>()
+    expectTypeOf(c.var.count).toEqualTypeOf<number>()
+    c.set('user', 'alice')
+    // @ts-expect-error — 'unknown' is not a declared var key
+    c.set('unknown', 'value')
+  })
+
+  expectTypeOf(mw).toEqualTypeOf<MiddlewareHandler<typeof cli.vars>>()
+})
+
+test('middleware() without generic gives empty context', () => {
+  middleware((c, _next) => {
+    expectTypeOf(c.var).toEqualTypeOf<{}>()
+  })
 })

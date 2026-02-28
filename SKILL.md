@@ -633,6 +633,37 @@ $ my-cli other-cmd
 # middleware does not run
 ```
 
+Per-command middleware runs after root and group middleware, and only for that command:
+
+```ts
+import { Cli, middleware, z } from 'incur'
+
+const cli = Cli.create('my-cli', {
+  description: 'My CLI',
+  vars: z.object({ user: z.custom<{ id: string }>() }),
+})
+
+const requireAuth = middleware<typeof cli.vars>((c, next) => {
+  if (!c.var.user) throw new Error('must be logged in')
+  return next()
+})
+
+cli.command('deploy', {
+  middleware: [requireAuth],
+  run() {
+    return { deployed: true }
+  },
+})
+```
+
+```sh
+$ my-cli deploy
+# Error: must be logged in
+
+$ my-cli other-cmd
+# per-command middleware does not run
+```
+
 ### Vars — typed dependency injection
 
 Declare a `vars` schema on `create()` to inject typed variables. Middleware sets them with `c.set()`, handlers read them via `c.var`. Use `.default()` for vars that don't need middleware:

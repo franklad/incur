@@ -1911,6 +1911,82 @@ describe('outputPolicy', () => {
     expect(exitCode).toBe(1)
   })
 
+  test('e2e: per-command middleware runs after root middleware', async () => {
+    const order: string[] = []
+    const cli = Cli.create('test')
+      .use(async (_c, next) => {
+        order.push('root')
+        await next()
+      })
+      .command('ping', {
+        middleware: [
+          async (_c, next) => {
+            order.push('cmd')
+            await next()
+          },
+        ],
+        run() {
+          order.push('run')
+          return { pong: true }
+        },
+      })
+      .command('other', {
+        run() {
+          order.push('other-run')
+          return { ok: true }
+        },
+      })
+
+    await serve(cli, ['ping'])
+    expect(order).toEqual(['root', 'cmd', 'run'])
+
+    // per-command middleware does not run for other commands
+    order.length = 0
+    await serve(cli, ['other'])
+    expect(order).toEqual(['root', 'other-run'])
+  })
+
+  test('e2e: per-command middleware composes with group middleware', async () => {
+    const order: string[] = []
+    const cli = Cli.create('test')
+    const admin = Cli.create('admin', { description: 'Admin' })
+      .use(async (_c, next) => {
+        order.push('group')
+        await next()
+      })
+      .command('reset', {
+        middleware: [
+          async (_c, next) => {
+            order.push('cmd')
+            await next()
+          },
+        ],
+        run() {
+          order.push('run')
+          return { reset: true }
+        },
+      })
+
+    cli.command(admin)
+    await serve(cli, ['admin', 'reset'])
+    expect(order).toEqual(['group', 'cmd', 'run'])
+  })
+
+  test('e2e: per-command middleware can short-circuit', async () => {
+    const cli = Cli.create('test').command('guarded', {
+      middleware: [
+        async () => {
+          throw new Error('blocked')
+        },
+      ],
+      run: () => ({ ok: true }),
+    })
+
+    const { output, exitCode } = await serve(cli, ['guarded'])
+    expect(output).toContain('blocked')
+    expect(exitCode).toBe(1)
+  })
+
   test('e2e: agent-only with streaming and error in nested group', async () => {
     const cli = Cli.create('tool')
     const ops = Cli.create('ops', {

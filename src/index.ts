@@ -1,5 +1,7 @@
 export { z } from 'zod'
 export * as Cli from './Cli.js'
+export { default as middleware } from './middleware.js'
+export type { Handler as MiddlewareHandler, Context as MiddlewareContext } from './middleware.js'
 export * as Errors from './Errors.js'
 export * as Formatter from './Formatter.js'
 export * as Help from './Help.js'

@@ -7,6 +7,8 @@ import * as Help from './Help.js'
 import { detectRunner } from './internal/pm.js'
 import type { OneOf } from './internal/types.js'
 import * as Mcp from './Mcp.js'
+import type { Context as MiddlewareContext, Handler as MiddlewareHandler } from './middleware.js'
+export type { MiddlewareHandler }
 import * as Parser from './Parser.js'
 import type { Register } from './Register.js'
 import * as Schema from './Schema.js'
@@ -59,6 +61,8 @@ export type Cli<
   serve(argv?: string[], options?: serve.Options): Promise<void>
   /** Registers middleware that runs around every command. */
   use(handler: MiddlewareHandler<vars>): Cli<commands, vars>
+  /** The vars schema, if declared. Use `typeof cli.vars` with `Middleware.create` for typed middleware. */
+  vars: vars
 }
 
 /** Root CLI — a single command with no subcommands. Carries phantom generics for mounting inference. */
@@ -170,6 +174,7 @@ export function create(
   const cli: Cli = {
     name,
     description: def.description,
+    vars: def.vars,
 
     command(nameOrCli: any, def?: any): any {
       if (typeof nameOrCli === 'string') {
@@ -716,10 +721,11 @@ async function serveImpl(
 
   const { command, path, rest } = effective
 
-  // Collect middleware: root CLI + groups traversed
+  // Collect middleware: root CLI + groups traversed + per-command
   const allMiddleware = [
     ...(options.middlewares ?? []),
     ...('middlewares' in resolved ? ((resolved as any).middlewares as MiddlewareHandler[]) ?? [] : []),
+    ...((command.middleware as MiddlewareHandler[] | undefined) ?? []),
   ]
 
   // Initialize vars from schema defaults
@@ -1527,24 +1533,6 @@ type InferReturn<output extends z.ZodType | undefined> = output extends z.ZodTyp
 type InferVars<vars extends z.ZodObject<any> | undefined> =
   vars extends z.ZodObject<any> ? z.output<vars> : {}
 
-/** Middleware handler that runs before/after command execution. */
-export type MiddlewareHandler<vars extends z.ZodObject<any> | undefined = undefined> = (
-  context: MiddlewareContext<vars>,
-  next: () => Promise<void>,
-) => Promise<void> | void
-
-/** Context available inside middleware. */
-type MiddlewareContext<vars extends z.ZodObject<any> | undefined = undefined> = {
-  /** Whether the consumer is an agent (stdout is not a TTY). */
-  agent: boolean
-  /** The resolved command path. */
-  command: string
-  /** Set a typed variable for downstream middleware and handlers. */
-  set<key extends string & keyof InferVars<vars>>(key: key, value: InferVars<vars>[key]): void
-  /** Variables set by upstream middleware. */
-  var: InferVars<vars>
-}
-
 /** @internal The output envelope written to stdout. */
 type Output = OneOf<
   | {
@@ -1624,6 +1612,8 @@ type CommandDefinition<
    * @default 'all'
    */
   outputPolicy?: OutputPolicy | undefined
+  /** Middleware that runs only for this command, after root and group middleware. */
+  middleware?: MiddlewareHandler<vars>[] | undefined
   /** Alternative usage patterns shown in help output. */
   usage?: Usage<args, options>[] | undefined
   /** The command handler. Return a value for single-return, or use `async *run` to stream chunks. */
