@@ -1,5 +1,5 @@
 ---
-'incur': minor
+'incur': patch
 ---
 
 - Added middleware support via `cli.use()`.
