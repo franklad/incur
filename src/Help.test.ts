@@ -72,6 +72,18 @@ describe('formatCommand', () => {
         --verbose                           Show full output envelope"
     `)
   })
+
+  test('shows [deprecated] tag for deprecated options', () => {
+    const result = Help.formatCommand('tool deploy', {
+      description: 'Deploy app',
+      options: z.object({
+        zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+        region: z.string().optional().describe('Target region'),
+      }),
+    })
+    expect(result).toContain('[deprecated] Availability zone')
+    expect(result).not.toContain('[deprecated] Target region')
+  })
 })
 
 describe('formatRoot', () => {

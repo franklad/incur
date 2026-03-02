@@ -751,6 +751,8 @@ async function serveImpl(
       options: command.options,
     })
 
+    if (human) emitDeprecationWarnings(rest, command.options, command.alias as Record<string, string> | undefined)
+
     const env = command.env ? Parser.parseEnv(command.env, envSource) : {}
 
     const okFn = (data: unknown, meta: { cta?: CtaBlock | undefined } = {}): never => {
@@ -1705,4 +1707,30 @@ type FormattedCta = {
   command: string
   /** A short description of what the command does. */
   description?: string | undefined
+}
+
+/** @internal Scans argv for deprecated flags and writes warnings to stderr. */
+function emitDeprecationWarnings(argv: string[], optionsSchema: z.ZodObject<any> | undefined, alias?: Record<string, string> | undefined) {
+  if (!optionsSchema) return
+  const shape = optionsSchema.shape as Record<string, any>
+  const deprecatedFlags = new Set<string>()
+  const deprecatedShorts = new Map<string, string>()
+  for (const key of Object.keys(shape)) {
+    const meta = shape[key]?.meta?.()
+    if (meta?.deprecated) {
+      const kebab = key.replace(/[A-Z]/g, (c: string) => `-${c.toLowerCase()}`)
+      deprecatedFlags.add(kebab)
+      if (alias?.[key]) deprecatedShorts.set(alias[key]!, kebab)
+    }
+  }
+  if (deprecatedFlags.size === 0) return
+  for (const token of argv) {
+    if (token.startsWith('--')) {
+      const stripped = token.split('=')[0]!.slice(2)
+      const raw = !deprecatedFlags.has(stripped) && stripped.startsWith('no-') ? stripped.slice(3) : stripped
+      if (deprecatedFlags.has(raw))
+        process.stderr.write(`Warning: --${raw} is deprecated\n`)
+    } else if (token.startsWith('-') && deprecatedShorts.has(token.slice(1)))
+      process.stderr.write(`Warning: --${deprecatedShorts.get(token.slice(1))} is deprecated\n`)
+  }
 }

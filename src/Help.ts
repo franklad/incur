@@ -140,10 +140,11 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
       const maxLen = Math.max(...entries.map((e) => e.flag.length))
       for (const entry of entries) {
         const padding = ' '.repeat(maxLen - entry.flag.length)
+        const prefix = entry.deprecated ? '[deprecated] ' : ''
         const desc =
           entry.defaultValue !== undefined
-            ? `${entry.description} (default: ${entry.defaultValue})`
-            : entry.description
+            ? `${prefix}${entry.description} (default: ${entry.defaultValue})`
+            : `${prefix}${entry.description}`
         lines.push(`  ${entry.flag}${padding}  ${desc}`)
       }
     }
@@ -236,14 +237,15 @@ function envEntries(schema: z.ZodObject<any>) {
 
 /** Extracts option entries from a Zod object schema. */
 function optionEntries(schema: z.ZodObject<any>, alias?: Record<string, string> | undefined) {
-  const entries: { flag: string; description: string; defaultValue?: unknown }[] = []
+  const entries: { flag: string; description: string; defaultValue?: unknown; deprecated?: boolean }[] = []
   for (const [key, field] of Object.entries(schema.shape)) {
     const type = resolveTypeName(field)
     const short = alias?.[key]
     const kebab = toKebab(key)
     const flag = short ? `--${kebab}, -${short} <${type}>` : `--${kebab} <${type}>`
     const defaultValue = extractDefault(field)
-    entries.push({ flag, description: (field as any).description ?? '', defaultValue })
+    const deprecated = extractDeprecated(field)
+    entries.push({ flag, description: (field as any).description ?? '', defaultValue, deprecated })
   }
   return entries
 }
@@ -276,6 +278,12 @@ function extractDefault(schema: unknown): unknown {
   }
   if (schema instanceof z.ZodOptional) return extractDefault(schema.unwrap())
   return undefined
+}
+
+/** Reads the `deprecated` flag from a Zod schema's `.meta()`. */
+function extractDeprecated(schema: unknown): boolean | undefined {
+  const meta = (schema as any)?.meta?.()
+  return meta?.deprecated === true ? true : undefined
 }
 
 /** Converts a camelCase string to kebab-case. */

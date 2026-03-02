@@ -84,6 +84,19 @@ describe('toJsonSchema', () => {
     })
   })
 
+  test('.meta({ deprecated: true }) adds deprecated to JSON Schema', () => {
+    const result = Schema.toJsonSchema(
+      z.object({
+        zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+      }),
+    )
+    expect(result).toMatchObject({
+      properties: {
+        zone: { type: 'string', description: 'Availability zone', deprecated: true },
+      },
+    })
+  })
+
   test('full object with optional, default, and describe', () => {
     const result = Schema.toJsonSchema(
       z.object({

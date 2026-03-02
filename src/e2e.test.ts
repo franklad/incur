@@ -1673,6 +1673,68 @@ describe('middleware', () => {
   })
 })
 
+describe('deprecated flags', () => {
+  test('emits stderr warning when deprecated flag is used in TTY mode', async () => {
+    const cli = Cli.create('app')
+      .command('deploy', {
+        options: z.object({
+          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+          region: z.string().optional().describe('Target region'),
+        }),
+        run: ({ options }) => ({ zone: options.zone, region: options.region }),
+      })
+
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    ;(process.stdout as any).isTTY = true
+    try {
+      await serve(cli, ['deploy', '--zone', 'us-east-1'])
+      expect(spy).toHaveBeenCalledWith('Warning: --zone is deprecated\n')
+    } finally {
+      ;(process.stdout as any).isTTY = false
+      spy.mockRestore()
+    }
+  })
+
+  test('does not emit stderr warning for non-deprecated flags', async () => {
+    const cli = Cli.create('app')
+      .command('deploy', {
+        options: z.object({
+          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+          region: z.string().optional().describe('Target region'),
+        }),
+        run: ({ options }) => ({ region: options.region }),
+      })
+
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    ;(process.stdout as any).isTTY = true
+    try {
+      await serve(cli, ['deploy', '--region', 'us-west-2'])
+      expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('deprecated'))
+    } finally {
+      ;(process.stdout as any).isTTY = false
+      spy.mockRestore()
+    }
+  })
+
+  test('does not emit stderr warning in agent mode (non-TTY)', async () => {
+    const cli = Cli.create('app')
+      .command('deploy', {
+        options: z.object({
+          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+        }),
+        run: ({ options }) => ({ zone: options.zone }),
+      })
+
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      await serve(cli, ['deploy', '--zone', 'us-east-1'])
+      expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('deprecated'))
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
 async function serve(
   cli: { serve: Cli.Cli['serve'] },
   argv: string[],
