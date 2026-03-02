@@ -1863,35 +1863,35 @@ describe('outputPolicy', () => {
   })
 
   test('e2e: middleware receives parsed CLI-level env', async () => {
-   let capturedEnv: any
-   const cli = Cli.create('test', {
-     env: z.object({
-       API_TOKEN: z.string(),
-       API_URL: z.string().default('https://api.example.com'),
-     }),
-   })
-     .use(async (c, next) => {
-       capturedEnv = c.env
-       await next()
-     })
-     .command('deploy', { run: () => ({ ok: true }) })
+    let capturedEnv: any
+    const cli = Cli.create('test', {
+      env: z.object({
+        API_TOKEN: z.string(),
+        API_URL: z.string().default('https://api.example.com'),
+      }),
+    })
+      .use(async (c, next) => {
+        capturedEnv = c.env
+        await next()
+      })
+      .command('deploy', { run: () => ({ ok: true }) })
 
-   await serve(cli, ['deploy'], { env: { API_TOKEN: 'secret-123' } })
-   expect(capturedEnv).toEqual({ API_TOKEN: 'secret-123', API_URL: 'https://api.example.com' })
+    await serve(cli, ['deploy'], { env: { API_TOKEN: 'secret-123' } })
+    expect(capturedEnv).toEqual({ API_TOKEN: 'secret-123', API_URL: 'https://api.example.com' })
   })
 
   test('e2e: CLI-level env validation error before middleware runs', async () => {
-   const cli = Cli.create('test', {
-     env: z.object({ API_TOKEN: z.string() }),
-   })
-     .use(async (_c, next) => {
-       await next()
-     })
-     .command('deploy', { run: () => ({ ok: true }) })
+    const cli = Cli.create('test', {
+      env: z.object({ API_TOKEN: z.string() }),
+    })
+      .use(async (_c, next) => {
+        await next()
+      })
+      .command('deploy', { run: () => ({ ok: true }) })
 
-   const { output, exitCode } = await serve(cli, ['deploy'], { env: {} })
-   expect(exitCode).toBe(1)
-   expect(output).toContain('Error')
+    const { output, exitCode } = await serve(cli, ['deploy'], { env: {} })
+    expect(exitCode).toBe(1)
+    expect(output).toContain('Error')
   })
 
   test('e2e: per-command middleware receives parsed CLI-level env', async () => {
@@ -1915,13 +1915,13 @@ describe('outputPolicy', () => {
   })
 
   test('e2e: CLI-level env available without middleware', async () => {
-   const cli = Cli.create('test', {
-     env: z.object({ API_TOKEN: z.string() }),
-   }).command('deploy', { run: () => ({ ok: true }) })
+    const cli = Cli.create('test', {
+      env: z.object({ API_TOKEN: z.string() }),
+    }).command('deploy', { run: () => ({ ok: true }) })
 
-   // Validation still runs even without middleware
-   const { exitCode } = await serve(cli, ['deploy'], { env: {} })
-   expect(exitCode).toBe(1)
+    // Validation still runs even without middleware
+    const { exitCode } = await serve(cli, ['deploy'], { env: {} })
+    expect(exitCode).toBe(1)
   })
 
   test('e2e: middleware context has correct agent and command', async () => {
@@ -2053,8 +2053,7 @@ describe('outputPolicy', () => {
     const vars = z.object({ authed: z.boolean().default(false) })
     const cli = Cli.create('test', { vars })
       .use((c, _next) => {
-        if (!c.var.authed)
-          return c.error({ code: 'DENIED', message: 'Not allowed' })
+        if (!c.var.authed) return c.error({ code: 'DENIED', message: 'Not allowed' })
       })
       .command('secret', {
         output: z.string(),

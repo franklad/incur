@@ -1675,14 +1675,13 @@ describe('middleware', () => {
 
 describe('deprecated flags', () => {
   test('emits stderr warning when deprecated flag is used in TTY mode', async () => {
-    const cli = Cli.create('app')
-      .command('deploy', {
-        options: z.object({
-          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
-          region: z.string().optional().describe('Target region'),
-        }),
-        run: ({ options }) => ({ zone: options.zone, region: options.region }),
-      })
+    const cli = Cli.create('app').command('deploy', {
+      options: z.object({
+        zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+        region: z.string().optional().describe('Target region'),
+      }),
+      run: ({ options }) => ({ zone: options.zone, region: options.region }),
+    })
 
     const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     ;(process.stdout as any).isTTY = true
@@ -1696,14 +1695,13 @@ describe('deprecated flags', () => {
   })
 
   test('does not emit stderr warning for non-deprecated flags', async () => {
-    const cli = Cli.create('app')
-      .command('deploy', {
-        options: z.object({
-          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
-          region: z.string().optional().describe('Target region'),
-        }),
-        run: ({ options }) => ({ region: options.region }),
-      })
+    const cli = Cli.create('app').command('deploy', {
+      options: z.object({
+        zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+        region: z.string().optional().describe('Target region'),
+      }),
+      run: ({ options }) => ({ region: options.region }),
+    })
 
     const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     ;(process.stdout as any).isTTY = true
@@ -1717,13 +1715,12 @@ describe('deprecated flags', () => {
   })
 
   test('does not emit stderr warning in agent mode (non-TTY)', async () => {
-    const cli = Cli.create('app')
-      .command('deploy', {
-        options: z.object({
-          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
-        }),
-        run: ({ options }) => ({ zone: options.zone }),
-      })
+    const cli = Cli.create('app').command('deploy', {
+      options: z.object({
+        zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+      }),
+      run: ({ options }) => ({ zone: options.zone }),
+    })
 
     const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     try {

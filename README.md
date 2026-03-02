@@ -558,8 +558,7 @@ const cli = Cli.create('my-cli', {
 
 // structured error with code — shows up in the output envelope
 const requireAuth = middleware<typeof cli.vars>((c, next) => {
-  if (!c.var.user)
-    return c.error({ code: 'AUTH', message: 'must be logged in' })
+  if (!c.var.user) return c.error({ code: 'AUTH', message: 'must be logged in' })
   return next()
 })
 

@@ -741,7 +741,7 @@ async function serveImpl(
   ]
 
   // Initialize vars from schema defaults
-    const varsMap: Record<string, unknown> = options.vars ? options.vars.parse({}) : {}
+  const varsMap: Record<string, unknown> = options.vars ? options.vars.parse({}) : {}
   const envSource = options.env ?? process.env
 
   const runCommand = async () => {
@@ -751,7 +751,12 @@ async function serveImpl(
       options: command.options,
     })
 
-    if (human) emitDeprecationWarnings(rest, command.options, command.alias as Record<string, string> | undefined)
+    if (human)
+      emitDeprecationWarnings(
+        rest,
+        command.options,
+        command.alias as Record<string, string> | undefined,
+      )
 
     const env = command.env ? Parser.parseEnv(command.env, envSource) : {}
 
@@ -1710,7 +1715,11 @@ type FormattedCta = {
 }
 
 /** @internal Scans argv for deprecated flags and writes warnings to stderr. */
-function emitDeprecationWarnings(argv: string[], optionsSchema: z.ZodObject<any> | undefined, alias?: Record<string, string> | undefined) {
+function emitDeprecationWarnings(
+  argv: string[],
+  optionsSchema: z.ZodObject<any> | undefined,
+  alias?: Record<string, string> | undefined,
+) {
   if (!optionsSchema) return
   const shape = optionsSchema.shape as Record<string, any>
   const deprecatedFlags = new Set<string>()
@@ -1727,9 +1736,9 @@ function emitDeprecationWarnings(argv: string[], optionsSchema: z.ZodObject<any>
   for (const token of argv) {
     if (token.startsWith('--')) {
       const stripped = token.split('=')[0]!.slice(2)
-      const raw = !deprecatedFlags.has(stripped) && stripped.startsWith('no-') ? stripped.slice(3) : stripped
-      if (deprecatedFlags.has(raw))
-        process.stderr.write(`Warning: --${raw} is deprecated\n`)
+      const raw =
+        !deprecatedFlags.has(stripped) && stripped.startsWith('no-') ? stripped.slice(3) : stripped
+      if (deprecatedFlags.has(raw)) process.stderr.write(`Warning: --${raw} is deprecated\n`)
     } else if (token.startsWith('-') && deprecatedShorts.has(token.slice(1)))
       process.stderr.write(`Warning: --${deprecatedShorts.get(token.slice(1))} is deprecated\n`)
   }

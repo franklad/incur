@@ -12,10 +12,7 @@ type InferEnv<env extends z.ZodObject<any> | undefined> =
 export type Handler<
   vars extends z.ZodObject<any> | undefined = undefined,
   env extends z.ZodObject<any> | undefined = undefined,
-> = (
-  context: Context<vars, env>,
-  next: () => Promise<void>,
-) => Promise<void> | void
+> = (context: Context<vars, env>, next: () => Promise<void>) => Promise<void> | void
 
 /** CTA block for middleware error/ok responses. */
 type CtaBlock = {
