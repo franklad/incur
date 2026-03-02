@@ -55,6 +55,21 @@ test('includes options table', () => {
   `)
 })
 
+test('prepends **Deprecated.** to deprecated option descriptions', () => {
+  const result = Skill.generate('test', [
+    {
+      name: 'deploy',
+      description: 'Deploy app',
+      options: z.object({
+        zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+        region: z.string().optional().describe('Target region'),
+      }),
+    },
+  ])
+  expect(result).toContain('**Deprecated.** Availability zone')
+  expect(result).not.toContain('**Deprecated.** Target region')
+})
+
 test('includes output schema', () => {
   const result = Skill.generate('test', [
     {

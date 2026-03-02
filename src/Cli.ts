@@ -751,6 +751,8 @@ async function serveImpl(
       options: command.options,
     })
 
+    if (human) emitDeprecationWarnings(rest, command.options)
+
     const env = command.env ? Parser.parseEnv(command.env, envSource) : {}
 
     const okFn = (data: unknown, meta: { cta?: CtaBlock | undefined } = {}): never => {
@@ -1678,4 +1680,25 @@ type FormattedCta = {
   command: string
   /** A short description of what the command does. */
   description?: string | undefined
+}
+
+/** @internal Scans argv for deprecated flags and writes warnings to stderr. */
+function emitDeprecationWarnings(argv: string[], optionsSchema: z.ZodObject<any> | undefined) {
+  if (!optionsSchema) return
+  const shape = optionsSchema.shape as Record<string, any>
+  const deprecatedFlags = new Map<string, string>()
+  for (const key of Object.keys(shape)) {
+    const meta = shape[key]?.meta?.()
+    if (meta?.deprecated) {
+      const kebab = key.replace(/[A-Z]/g, (c: string) => `-${c.toLowerCase()}`)
+      deprecatedFlags.set(kebab, key)
+    }
+  }
+  if (deprecatedFlags.size === 0) return
+  for (const token of argv) {
+    const raw = token.startsWith('--no-') ? token.slice(5) : token.startsWith('--') ? token.split('=')[0]!.slice(2) : undefined
+    if (raw && deprecatedFlags.has(raw)) {
+      process.stderr.write(`Warning: --${raw} is deprecated\n`)
+    }
+  }
 }

@@ -1673,6 +1673,74 @@ describe('middleware', () => {
   })
 })
 
+describe('deprecated flags', () => {
+  test('emits stderr warning when deprecated flag is used in TTY mode', async () => {
+    const cli = Cli.create('app')
+      .command('deploy', {
+        options: z.object({
+          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+          region: z.string().optional().describe('Target region'),
+        }),
+        run: ({ options }) => ({ zone: options.zone, region: options.region }),
+      })
+
+    let stderr = ''
+    const origWrite = process.stderr.write
+    process.stderr.write = ((s: string) => { stderr += s; return true }) as any
+    ;(process.stdout as any).isTTY = true
+    try {
+      await serve(cli, ['deploy', '--zone', 'us-east-1'])
+    } finally {
+      ;(process.stdout as any).isTTY = false
+      process.stderr.write = origWrite
+    }
+    expect(stderr).toContain('Warning: --zone is deprecated')
+  })
+
+  test('does not emit stderr warning for non-deprecated flags', async () => {
+    const cli = Cli.create('app')
+      .command('deploy', {
+        options: z.object({
+          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+          region: z.string().optional().describe('Target region'),
+        }),
+        run: ({ options }) => ({ region: options.region }),
+      })
+
+    let stderr = ''
+    const origWrite = process.stderr.write
+    process.stderr.write = ((s: string) => { stderr += s; return true }) as any
+    ;(process.stdout as any).isTTY = true
+    try {
+      await serve(cli, ['deploy', '--region', 'us-west-2'])
+    } finally {
+      ;(process.stdout as any).isTTY = false
+      process.stderr.write = origWrite
+    }
+    expect(stderr).not.toContain('deprecated')
+  })
+
+  test('does not emit stderr warning in agent mode (non-TTY)', async () => {
+    const cli = Cli.create('app')
+      .command('deploy', {
+        options: z.object({
+          zone: z.string().optional().describe('Availability zone').meta({ deprecated: true }),
+        }),
+        run: ({ options }) => ({ zone: options.zone }),
+      })
+
+    let stderr = ''
+    const origWrite = process.stderr.write
+    process.stderr.write = ((s: string) => { stderr += s; return true }) as any
+    try {
+      await serve(cli, ['deploy', '--zone', 'us-east-1'])
+    } finally {
+      process.stderr.write = origWrite
+    }
+    expect(stderr).not.toContain('deprecated')
+  })
+})
+
 async function serve(
   cli: { serve: Cli.Cli['serve'] },
   argv: string[],

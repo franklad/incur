@@ -158,7 +158,8 @@ function renderCommandBody(cli: string, cmd: CommandInfo, level = 1): string {
       const prop = properties?.[key]
       const type = resolveTypeName(prop)
       const def = prop?.default !== undefined ? String(prop.default) : ''
-      const desc = field.description ?? ''
+      const rawDesc = field.description ?? ''
+      const desc = prop?.deprecated ? `**Deprecated.** ${rawDesc}` : rawDesc
       return `| \`--${key}\` | \`${type}\` | ${def ? `\`${def}\`` : ''} | ${desc} |`
     })
     sections.push(
