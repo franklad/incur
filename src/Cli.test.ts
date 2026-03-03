@@ -138,7 +138,7 @@ describe('serve', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "code: COMMAND_NOT_FOUND
-      message: 'nonexistent' is not a command.
+      message: 'nonexistent' is not a command for 'test'.
       cta:
         description: "See available commands:"
         commands[1]{command}:
@@ -155,7 +155,7 @@ describe('serve', () => {
     ;(process.stdout as any).isTTY = false
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
-      "Error: 'nonexistent' is not a command.
+      "Error: 'nonexistent' is not a command for 'test'.
 
       See available commands:
         test --help
@@ -172,7 +172,7 @@ describe('serve', () => {
       "ok: false
       error:
         code: COMMAND_NOT_FOUND
-        message: 'nonexistent' is not a command.
+        message: 'nonexistent' is not a command for 'test'.
       meta:
         command: nonexistent
         cta:
@@ -691,7 +691,7 @@ describe('subcommands', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "code: COMMAND_NOT_FOUND
-      message: 'unknown' is not a command.
+      message: 'unknown' is not a command for 'test pr'.
       cta:
         description: "See available commands:"
         commands[1]{command}:
@@ -712,7 +712,7 @@ describe('subcommands', () => {
     ;(process.stdout as any).isTTY = false
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
-      "Error: 'unknown' is not a command.
+      "Error: 'unknown' is not a command for 'test pr'.
 
       See available commands:
         test pr --help
@@ -1479,6 +1479,48 @@ describe('env', () => {
         API_URL    API URL (default: https://api.example.com)
       "
     `)
+  })
+
+  test('--help shows (set) for env vars present in process.env', async () => {
+    const cli = Cli.create('test')
+    cli.command('deploy', {
+      env: z.object({
+        API_TOKEN: z.string().describe('Auth token'),
+        API_URL: z.string().default('https://api.example.com').describe('API URL'),
+      }),
+      run() {
+        return {}
+      },
+    })
+
+    process.env.API_TOKEN = 'secret'
+    try {
+      const { output } = await serve(cli, ['deploy', '--help'])
+      expect(output).toMatchInlineSnapshot(`
+        "test deploy
+
+        Usage: test deploy
+
+        Global Options:
+          --format <toon|json|yaml|md|jsonl>  Output format
+          --help                              Show help
+          --llms                              Print LLM-readable manifest
+          --verbose                           Show full output envelope
+
+        Environment Variables:
+          API_TOKEN  Auth token (set: ••••ret)
+          API_URL    API URL (default: https://api.example.com)
+        "
+      `)
+
+      // Both set and default shown together
+      process.env.API_URL = 'https://custom.example.com'
+      const { output: output2 } = await serve(cli, ['deploy', '--help'])
+      expect(output2).toContain('API_URL    API URL (set: ••••com, default: https://api.example.com)')
+    } finally {
+      delete process.env.API_TOKEN
+      delete process.env.API_URL
+    }
   })
 
   test('--llms json includes schema.env', async () => {

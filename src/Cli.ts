@@ -736,7 +736,8 @@ async function serveImpl(
 
   if ('error' in effective) {
     const helpCmd = effective.path ? `${name} ${effective.path} --help` : `${name} --help`
-    const message = `'${effective.error}' is not a command.`
+    const parent = effective.path ? `${name} ${effective.path}` : name
+    const message = `'${effective.error}' is not a command for '${parent}'.`
     const cta: FormattedCtaBlock = {
       description: 'See available commands:',
       commands: [{ command: helpCmd }],

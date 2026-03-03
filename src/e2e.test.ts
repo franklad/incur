@@ -66,7 +66,7 @@ describe('routing', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "code: COMMAND_NOT_FOUND
-      message: 'nonexistent' is not a command.
+      message: 'nonexistent' is not a command for 'app'.
       cta:
         description: "See available commands:"
         commands[1]{command}:
@@ -81,7 +81,7 @@ describe('routing', () => {
     ;(process.stdout as any).isTTY = false
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
-      "Error: 'nonexistent' is not a command.
+      "Error: 'nonexistent' is not a command for 'app'.
 
       See available commands:
         app --help
@@ -94,7 +94,7 @@ describe('routing', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "code: COMMAND_NOT_FOUND
-      message: 'whoami' is not a command.
+      message: 'whoami' is not a command for 'app auth'.
       cta:
         description: "See available commands:"
         commands[1]{command}:
@@ -108,7 +108,7 @@ describe('routing', () => {
     expect(exitCode).toBe(1)
     expect(output).toMatchInlineSnapshot(`
       "code: COMMAND_NOT_FOUND
-      message: 'nope' is not a command.
+      message: 'nope' is not a command for 'app project deploy'.
       cta:
         description: "See available commands:"
         commands[1]{command}:
@@ -509,7 +509,7 @@ describe('error handling', () => {
       {
         "error": {
           "code": "COMMAND_NOT_FOUND",
-          "message": "'nonexistent' is not a command.",
+          "message": "'nonexistent' is not a command for 'app'.",
         },
         "meta": {
           "command": "nonexistent",

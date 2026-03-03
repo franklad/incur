@@ -196,10 +196,11 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
       const maxLen = Math.max(...entries.map((e) => e.name.length))
       for (const entry of entries) {
         const padding = ' '.repeat(maxLen - entry.name.length)
+        const parts: string[] = [entry.description]
+        if (entry.name in process.env) parts.push(`set: ${redact(process.env[entry.name]!)}`)
+        if (entry.defaultValue !== undefined) parts.push(`default: ${entry.defaultValue}`)
         const desc =
-          entry.defaultValue !== undefined
-            ? `${entry.description} (default: ${entry.defaultValue})`
-            : entry.description
+          parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(', ')})` : parts[0]
         lines.push(`  ${entry.name}${padding}  ${desc}`)
       }
     }
@@ -329,4 +330,10 @@ function globalOptionsLines(root = false): string[] {
   )
 
   return lines
+}
+
+/** Redacts a value, showing only the last 3 characters. */
+function redact(value: string): string {
+  if (value.length <= 3) return '••••'
+  return `••••${value.slice(-3)}`
 }
