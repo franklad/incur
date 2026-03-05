@@ -264,3 +264,70 @@ test('env is typed in per-command middleware', () => {
     run: () => ({}),
   })
 })
+
+test('globals type flows to middleware context', () => {
+  Cli.create('test', {
+    globals: z.object({
+      apiKey: z.string().optional(),
+      network: z.enum(['mainnet', 'devnet']).default('mainnet'),
+    }),
+  }).use((c, _next) => {
+    expectTypeOf(c.globals.apiKey).toEqualTypeOf<string | undefined>()
+    expectTypeOf(c.globals.network).toEqualTypeOf<'mainnet' | 'devnet'>()
+  })
+})
+
+test('globals type flows to command run context', () => {
+  Cli.create('test', {
+    globals: z.object({
+      apiKey: z.string().optional(),
+      network: z.enum(['mainnet', 'devnet']).default('mainnet'),
+    }),
+  }).command('status', {
+    run(c) {
+      expectTypeOf(c.globals.apiKey).toEqualTypeOf<string | undefined>()
+      expectTypeOf(c.globals.network).toEqualTypeOf<'mainnet' | 'devnet'>()
+      return {}
+    },
+  })
+})
+
+test('without globals, c.globals is empty object', () => {
+  Cli.create('test').command('ping', {
+    run(c) {
+      expectTypeOf(c.globals).toEqualTypeOf<{}>()
+      return {}
+    },
+  })
+})
+
+test('globalAlias keys are constrained to globals schema keys', () => {
+  Cli.create('test', {
+    globals: z.object({ apiKey: z.string(), network: z.string() }),
+    globalAlias: { apiKey: 'k', network: 'n' },
+  })
+
+  Cli.create('test', {
+    globals: z.object({ apiKey: z.string() }),
+    // @ts-expect-error — 'foo' is not a globals key
+    globalAlias: { foo: 'f' },
+  })
+})
+
+test('middleware<vars, env, globals>() infers globals types', () => {
+  const cli = Cli.create('test', {
+    globals: z.object({ apiKey: z.string() }),
+    vars: z.object({ user: z.string() }),
+    env: z.object({ TOKEN: z.string() }),
+  })
+
+  const mw = middleware<typeof cli.vars, typeof cli.env, typeof cli.globals>((c, _next) => {
+    expectTypeOf(c.globals.apiKey).toEqualTypeOf<string>()
+    expectTypeOf(c.var.user).toEqualTypeOf<string>()
+    expectTypeOf(c.env.TOKEN).toEqualTypeOf<string>()
+  })
+
+  expectTypeOf(mw).toEqualTypeOf<
+    MiddlewareHandler<typeof cli.vars, typeof cli.env, typeof cli.globals>
+  >()
+})

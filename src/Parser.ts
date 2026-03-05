@@ -208,6 +208,115 @@ function zodParse(schema: z.ZodObject<any>, data: Record<string, unknown>) {
   }
 }
 
+/**
+ * Extracts global flags from argv, returning parsed values and remaining tokens.
+ * Known global flags are parsed and removed; unknown flags are kept in `rest`
+ * for the command parser to handle.
+ */
+export function parseGlobals<const globals extends z.ZodObject<any>>(
+  argv: string[],
+  schema: globals,
+  alias?: Record<string, string>,
+): { parsed: z.output<globals>; rest: string[] } {
+  const aliasToName = new Map<string, string>()
+  if (alias) for (const [name, short] of Object.entries(alias)) aliasToName.set(short, name)
+
+  const knownOptions = new Set(Object.keys(schema.shape))
+  const kebabToCamel = new Map<string, string>()
+  for (const name of knownOptions) {
+    const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+    if (kebab !== name) kebabToCamel.set(kebab, name)
+  }
+
+  const rawOptions: Record<string, unknown> = {}
+  const rest: string[] = []
+
+  let i = 0
+  while (i < argv.length) {
+    const token = argv[i]!
+
+    if (token.startsWith('--no-') && token.length > 5) {
+      const raw = token.slice(5)
+      const name = kebabToCamel.get(raw) ?? raw
+      if (!knownOptions.has(name)) {
+        rest.push(token)
+        i++
+      } else {
+        rawOptions[name] = false
+        i++
+      }
+    } else if (token.startsWith('--')) {
+      const eqIdx = token.indexOf('=')
+      if (eqIdx !== -1) {
+        // --flag=value
+        const raw = token.slice(2, eqIdx)
+        const name = kebabToCamel.get(raw) ?? raw
+        if (!knownOptions.has(name)) {
+          rest.push(token)
+          i++
+        } else {
+          setOption(rawOptions, name, token.slice(eqIdx + 1), schema)
+          i++
+        }
+      } else {
+        // --flag [value]
+        const raw = token.slice(2)
+        const name = kebabToCamel.get(raw) ?? raw
+        if (!knownOptions.has(name)) {
+          rest.push(token)
+          i++
+        } else if (isBooleanOption(name, schema)) {
+          rawOptions[name] = true
+          i++
+        } else {
+          const value = argv[i + 1]
+          if (value === undefined)
+            throw new ParseError({ message: `Missing value for global flag: ${token}` })
+          setOption(rawOptions, name, value, schema)
+          i += 2
+        }
+      }
+    } else if (token.startsWith('-') && !token.startsWith('--') && token.length >= 2) {
+      // -f or -abc (stacked short aliases) — only claim if ALL chars are known global aliases
+      const chars = token.slice(1)
+      if (!Array.from(chars).every((c) => aliasToName.has(c))) {
+        rest.push(token)
+        i++
+      } else {
+        for (let j = 0; j < chars.length; j++) {
+          const short = chars[j]!
+          const name = aliasToName.get(short)!
+          const isLast = j === chars.length - 1
+          if (!isLast) {
+            if (!isBooleanOption(name, schema))
+              throw new ParseError({
+                message: `Non-boolean flag -${short} must be last in a stacked alias`,
+              })
+            rawOptions[name] = true
+          } else if (isBooleanOption(name, schema)) {
+            rawOptions[name] = true
+          } else {
+            const value = argv[i + 1]
+            if (value === undefined)
+              throw new ParseError({ message: `Missing value for global flag: -${short}` })
+            setOption(rawOptions, name, value, schema)
+            i++
+          }
+        }
+        i++
+      }
+    } else {
+      rest.push(token)
+      i++
+    }
+  }
+
+  for (const [name, value] of Object.entries(rawOptions))
+    rawOptions[name] = coerce(value, name, schema)
+
+  return { parsed: zodParse(schema, rawOptions) as z.output<globals>, rest }
+}
+
 /** Parses environment variables against a Zod schema. Falls back to `process.env` → `Deno.env` when no source is provided. */
 export function parseEnv<const env extends z.ZodObject<any>>(
   schema: env,

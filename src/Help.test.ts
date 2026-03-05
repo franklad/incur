@@ -158,6 +158,30 @@ describe('formatRoot', () => {
     `)
   })
 
+  test('custom globals appear in help output', () => {
+    const result = Help.formatCommand('helius status', {
+      description: 'Show status',
+      globals: z.object({
+        apiKey: z.string().optional().describe('API key for authentication'),
+        network: z.enum(['mainnet', 'devnet']).default('mainnet').describe('Target network'),
+      }),
+      globalAlias: { apiKey: 'k' },
+    })
+    expect(result).toMatchInlineSnapshot(`
+      "helius status — Show status
+
+      Usage: helius status
+
+      Global Options:
+        --api-key, -k <string>              API key for authentication
+        --network <value>                   Target network (default: mainnet)
+        --format <toon|json|yaml|md|jsonl>  Output format
+        --help                              Show help
+        --llms                              Print LLM-readable manifest
+        --verbose                           Show full output envelope"
+    `)
+  })
+
   test('formatCommand shows aliases', () => {
     const result = Help.formatCommand('my-tool', {
       description: 'A test CLI',

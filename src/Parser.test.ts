@@ -203,3 +203,106 @@ describe('parse', () => {
     expect(result.options).toEqual({ limit: 5 })
   })
 })
+
+describe('parseGlobals', () => {
+  test('parses known global flags and returns rest', () => {
+    const result = Parser.parseGlobals(
+      ['--api-key', 'sk-xxx', 'status', '--verbose'],
+      z.object({ apiKey: z.string().optional() }),
+    )
+    expect(result.parsed).toEqual({ apiKey: 'sk-xxx' })
+    expect(result.rest).toEqual(['status', '--verbose'])
+  })
+
+  test('unknown flags pass through in rest', () => {
+    const result = Parser.parseGlobals(
+      ['--api-key', 'sk-xxx', '--unknown', 'val', 'cmd'],
+      z.object({ apiKey: z.string().optional() }),
+    )
+    expect(result.parsed).toEqual({ apiKey: 'sk-xxx' })
+    expect(result.rest).toEqual(['--unknown', 'val', 'cmd'])
+  })
+
+  test('aliases work', () => {
+    const result = Parser.parseGlobals(
+      ['-k', 'sk-xxx', 'status'],
+      z.object({ apiKey: z.string().optional() }),
+      { apiKey: 'k' },
+    )
+    expect(result.parsed).toEqual({ apiKey: 'sk-xxx' })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('defaults are applied when not provided', () => {
+    const result = Parser.parseGlobals(
+      ['status'],
+      z.object({ network: z.enum(['mainnet', 'devnet']).default('mainnet') }),
+    )
+    expect(result.parsed).toEqual({ network: 'mainnet' })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('boolean globals', () => {
+    const result = Parser.parseGlobals(
+      ['--dry-run', 'status'],
+      z.object({ dryRun: z.boolean().default(false) }),
+    )
+    expect(result.parsed).toEqual({ dryRun: true })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('--no- negation for booleans', () => {
+    const result = Parser.parseGlobals(
+      ['--no-dry-run', 'status'],
+      z.object({ dryRun: z.boolean().default(true) }),
+    )
+    expect(result.parsed).toEqual({ dryRun: false })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('number coercion', () => {
+    const result = Parser.parseGlobals(
+      ['--timeout', '30', 'status'],
+      z.object({ timeout: z.number().default(10) }),
+    )
+    expect(result.parsed).toEqual({ timeout: 30 })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('--flag=value syntax', () => {
+    const result = Parser.parseGlobals(
+      ['--api-key=sk-xxx', 'status'],
+      z.object({ apiKey: z.string().optional() }),
+    )
+    expect(result.parsed).toEqual({ apiKey: 'sk-xxx' })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('enum type', () => {
+    const result = Parser.parseGlobals(
+      ['--network', 'devnet', 'status'],
+      z.object({ network: z.enum(['mainnet', 'devnet']).default('mainnet') }),
+    )
+    expect(result.parsed).toEqual({ network: 'devnet' })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('array type', () => {
+    const result = Parser.parseGlobals(
+      ['--header', 'X-Key: abc', '--header', 'X-Id: 123', 'status'],
+      z.object({ header: z.array(z.string()).default([]) }),
+    )
+    expect(result.parsed).toEqual({ header: ['X-Key: abc', 'X-Id: 123'] })
+    expect(result.rest).toEqual(['status'])
+  })
+
+  test('unknown short aliases pass through', () => {
+    const result = Parser.parseGlobals(
+      ['-v', 'status'],
+      z.object({ apiKey: z.string().optional() }),
+      { apiKey: 'k' },
+    )
+    expect(result.parsed).toEqual({})
+    expect(result.rest).toEqual(['-v', 'status'])
+  })
+})

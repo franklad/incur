@@ -8,11 +8,16 @@ type InferVars<vars extends z.ZodObject<any> | undefined> =
 type InferEnv<env extends z.ZodObject<any> | undefined> =
   env extends z.ZodObject<any> ? z.output<env> : {}
 
+/** @internal Infers the output type of a globals schema, or `{}` if undefined. */
+export type InferGlobals<globals extends z.ZodObject<any> | undefined> =
+  globals extends z.ZodObject<any> ? z.output<globals> : {}
+
 /** Middleware handler that runs before/after command execution. */
 export type Handler<
   vars extends z.ZodObject<any> | undefined = undefined,
   env extends z.ZodObject<any> | undefined = undefined,
-> = (context: Context<vars, env>, next: () => Promise<void>) => Promise<void> | void
+  globals extends z.ZodObject<any> | undefined = undefined,
+> = (context: Context<vars, env, globals>, next: () => Promise<void>) => Promise<void> | void
 
 /** CTA block for middleware error/ok responses. */
 type CtaBlock = {
@@ -26,6 +31,7 @@ type CtaBlock = {
 export type Context<
   vars extends z.ZodObject<any> | undefined = undefined,
   env extends z.ZodObject<any> | undefined = undefined,
+  globals extends z.ZodObject<any> | undefined = undefined,
 > = {
   /** Whether the consumer is an agent (stdout is not a TTY). */
   agent: boolean
@@ -38,6 +44,8 @@ export type Context<
     message: string
     retryable?: boolean | undefined
   }) => never
+  /** Parsed global options from the CLI-level globals schema. */
+  globals: InferGlobals<globals>
   /** The CLI name. */
   name: string
   /** Parsed environment variables from the CLI-level env schema. */
@@ -50,10 +58,11 @@ export type Context<
   version: string | undefined
 }
 
-/** Creates a strictly typed middleware handler. Pass the vars schema as a generic for typed `c.set()` and `c.var`, and the env schema for typed `c.env`. */
+/** Creates a strictly typed middleware handler. Pass the vars schema as a generic for typed `c.set()` and `c.var`, the env schema for typed `c.env`, and the globals schema for typed `c.globals`. */
 export default function middleware<
   const vars extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
->(handler: Handler<vars, env>): Handler<vars, env> {
+  const globals extends z.ZodObject<any> | undefined = undefined,
+>(handler: Handler<vars, env, globals>): Handler<vars, env, globals> {
   return handler
 }

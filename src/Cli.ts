@@ -10,7 +10,7 @@ import * as Help from './Help.js'
 import { detectRunner } from './internal/pm.js'
 import type { OneOf } from './internal/types.js'
 import * as Mcp from './Mcp.js'
-import type { Context as MiddlewareContext, Handler as MiddlewareHandler } from './middleware.js'
+import type { Context as MiddlewareContext, Handler as MiddlewareHandler, InferGlobals } from './middleware.js'
 export type { MiddlewareHandler }
 import * as Parser from './Parser.js'
 import type { Register } from './Register.js'
@@ -24,6 +24,7 @@ export type Cli<
   commands extends CommandsMap = {},
   vars extends z.ZodObject<any> | undefined = undefined,
   env extends z.ZodObject<any> | undefined = undefined,
+  globals extends z.ZodObject<any> | undefined = undefined,
 > = {
   /** Registers a root command or mounts a sub-CLI as a command group. */
   command: {
@@ -36,16 +37,17 @@ export type Cli<
       const output extends z.ZodType | undefined = undefined,
     >(
       name: name,
-      definition: CommandDefinition<args, cmdEnv, options, output, vars, env>,
+      definition: CommandDefinition<args, cmdEnv, options, output, vars, env, globals>,
     ): Cli<
       commands & { [key in name]: { args: InferOutput<args>; options: InferOutput<options> } },
       vars,
-      env
+      env,
+      globals
     >
     /** Mounts a sub-CLI as a command group. */
     <const name extends string, const sub extends CommandsMap>(
-      cli: Cli<sub, any, any> & { name: name },
-    ): Cli<commands & { [key in keyof sub & string as `${name} ${key}`]: sub[key] }, vars, env>
+      cli: Cli<sub, any, any, any> & { name: name },
+    ): Cli<commands & { [key in keyof sub & string as `${name} ${key}`]: sub[key] }, vars, env, globals>
     /** Mounts a root CLI as a single command. */
     <
       const name extends string,
@@ -56,24 +58,27 @@ export type Cli<
     ): Cli<
       commands & { [key in name]: { args: InferOutput<args>; options: InferOutput<opts> } },
       vars,
-      env
+      env,
+      globals
     >
     /** Mounts a fetch handler as a command, optionally with OpenAPI spec for typed subcommands. */
     <const name extends string>(
       name: name,
       definition: { basePath?: string | undefined; description?: string | undefined; fetch: FetchHandler; openapi?: Openapi.OpenAPISpec | undefined; outputPolicy?: OutputPolicy | undefined },
-    ): Cli<commands, vars, env>
+    ): Cli<commands, vars, env, globals>
   }
   /** A short description of the CLI. */
   description?: string | undefined
   /** The env schema, if declared. Use `typeof cli.env` with `middleware<vars, env>()` for typed middleware. */
   env: env
+  /** The globals schema, if declared. Use `typeof cli.globals` with `middleware<vars, env, globals>()` for typed middleware. */
+  globals: globals
   /** The name of the CLI application. */
   name: string
   /** Parses argv, runs the matched command, and writes the output envelope to stdout. */
   serve(argv?: string[], options?: serve.Options): Promise<void>
   /** Registers middleware that runs around every command. */
-  use(handler: MiddlewareHandler<vars, env>): Cli<commands, vars, env>
+  use(handler: MiddlewareHandler<vars, env, globals>): Cli<commands, vars, env, globals>
   /** The vars schema, if declared. Use `typeof cli.vars` with `middleware<vars, env>()` for typed middleware. */
   vars: vars
 }
@@ -135,45 +140,50 @@ export type Cta<commands extends CommandsMap = Commands> =
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
+  const globals extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
   const vars extends z.ZodObject<any> | undefined = undefined,
 >(
   name: string,
-  definition: create.Options<args, env, opts, output, vars> & { run: Function },
-): Cli<{ [key in typeof name]: { args: InferOutput<args>; options: InferOutput<opts> } }, vars, env>
+  definition: create.Options<args, env, globals, opts, output, vars> & { run: Function },
+): Cli<{ [key in typeof name]: { args: InferOutput<args>; options: InferOutput<opts> } }, vars, env, globals>
 /** Creates a router CLI that registers subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
+  const globals extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
   const vars extends z.ZodObject<any> | undefined = undefined,
->(name: string, definition?: create.Options<args, env, opts, output, vars>): Cli<{}, vars, env>
+>(name: string, definition?: create.Options<args, env, globals, opts, output, vars>): Cli<{}, vars, env, globals>
 /** Creates a CLI with a root handler from a single options object. Can still register subcommands. */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
+  const globals extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
   const vars extends z.ZodObject<any> | undefined = undefined,
 >(
-  definition: create.Options<args, env, opts, output, vars> & { name: string; run: Function },
+  definition: create.Options<args, env, globals, opts, output, vars> & { name: string; run: Function },
 ): Cli<
   {
     [key in (typeof definition)['name']]: { args: InferOutput<args>; options: InferOutput<opts> }
   },
   vars,
-  env
+  env,
+  globals
 >
 /** Creates a router CLI from a single options object (e.g. package.json). */
 export function create<
   const args extends z.ZodObject<any> | undefined = undefined,
   const env extends z.ZodObject<any> | undefined = undefined,
+  const globals extends z.ZodObject<any> | undefined = undefined,
   const opts extends z.ZodObject<any> | undefined = undefined,
   const output extends z.ZodType | undefined = undefined,
   const vars extends z.ZodObject<any> | undefined = undefined,
->(definition: create.Options<args, env, opts, output, vars> & { name: string }): Cli<{}, vars, env>
+>(definition: create.Options<args, env, globals, opts, output, vars> & { name: string }): Cli<{}, vars, env, globals>
 export function create(
   nameOrDefinition: string | (any & { name: string }),
   definition?: any,
@@ -183,6 +193,16 @@ export function create(
   const rootDef = 'run' in def ? (def as CommandDefinition<any, any, any>) : undefined
   const rootFetch = 'fetch' in def ? (def.fetch as FetchHandler) : undefined
 
+  // Validate globals schema keys don't collide with built-in flags
+  if (def.globals) {
+    const builtinNames = new Set(['verbose', 'format', 'help', 'version', 'llms', 'mcp', 'json'])
+    for (const key of Object.keys(def.globals.shape)) {
+      const kebab = key.replace(/[A-Z]/g, (c: string) => `-${c.toLowerCase()}`)
+      if (builtinNames.has(key) || builtinNames.has(kebab))
+        throw new Error(`Global option '${key}' conflicts with built-in flag '--${kebab}'`)
+    }
+  }
+
   const commands = new Map<string, CommandEntry>()
   const middlewares: MiddlewareHandler[] = []
   const pending: Promise<void>[] = []
@@ -191,6 +211,7 @@ export function create(
     name,
     description: def.description,
     env: def.env,
+    globals: def.globals,
     vars: def.vars,
 
     command(nameOrCli: any, def?: any): any {
@@ -249,6 +270,8 @@ export function create(
         description: def.description,
         envSchema: def.env,
         format: def.format,
+        globals: def.globals,
+        globalAlias: def.globalAlias,
         mcp: def.mcp,
         middlewares,
         outputPolicy: def.outputPolicy,
@@ -278,6 +301,7 @@ export declare namespace create {
   type Options<
     args extends z.ZodObject<any> | undefined = undefined,
     env extends z.ZodObject<any> | undefined = undefined,
+    globals extends z.ZodObject<any> | undefined = undefined,
     options extends z.ZodObject<any> | undefined = undefined,
     output extends z.ZodType | undefined = undefined,
     vars extends z.ZodObject<any> | undefined = undefined,
@@ -300,6 +324,12 @@ export declare namespace create {
     fetch?: FetchHandler | undefined
     /** Default output format. Overridden by `--format` or `--json`. */
     format?: Formatter.Format | undefined
+    /** Map of global option names to single-char aliases. */
+    globalAlias?: globals extends z.ZodObject<any>
+      ? Partial<Record<keyof z.output<globals>, string>>
+      : Record<string, string> | undefined
+    /** Zod schema for global options/flags available on every subcommand. */
+    globals?: globals | undefined
     /** Zod schema for named options/flags. */
     options?: options | undefined
     /** Zod schema for the return value. */
@@ -335,6 +365,8 @@ export declare namespace create {
             message: string
             retryable?: boolean | undefined
           }) => never
+          /** Parsed global options. */
+          globals: InferGlobals<globals>
           /** Return a success result with optional metadata (e.g. CTAs). */
           ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
           options: InferOutput<options>
@@ -403,8 +435,24 @@ async function serveImpl(
     mcp: mcpFlag,
     help,
     version,
-    rest: filtered,
+    rest: builtinFiltered,
   } = extractBuiltinFlags(argv)
+
+  // Parse globals from argv (if configured), stripping them before command routing
+  let parsedGlobals: Record<string, unknown> = {}
+  let filtered = builtinFiltered
+  if (options.globals) {
+    try {
+      const result = Parser.parseGlobals(builtinFiltered, options.globals, options.globalAlias)
+      parsedGlobals = result.parsed
+      filtered = result.rest
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      stdout(`Error: ${msg}\n`)
+      exit(1)
+      return
+    }
+  }
 
   // --mcp: start as MCP stdio server
   if (mcpFlag) {
@@ -424,7 +472,7 @@ async function serveImpl(
       stdout(names.map((n) => Completions.register(completeShell, n)).join('\n'))
     } else {
       const index = Number(process.env._COMPLETE_INDEX ?? words.length - 1)
-      const candidates = Completions.complete(commands, options.rootCommand, words, index)
+      const candidates = Completions.complete(commands, options.rootCommand, words, index, options.globals ? { schema: options.globals, alias: options.globalAlias } : undefined)
       const out = Completions.format(completeShell, candidates)
       if (out) stdout(out)
     }
@@ -483,7 +531,7 @@ async function serveImpl(
       writeln(Skill.generate(scopedName, cmds, groups))
       return
     }
-    writeln(Formatter.format(buildManifest(scopedCommands, prefix), formatFlag))
+    writeln(Formatter.format(buildManifest(scopedCommands, prefix, options.globals), formatFlag))
     return
   }
 
@@ -716,6 +764,8 @@ async function serveImpl(
           args: cmd.args,
           env: cmd.env,
           envSource: options.env,
+          globalAlias: options.globalAlias,
+          globals: options.globals,
           hint: cmd.hint,
           options: cmd.options,
           examples: formatExamples(cmd.examples),
@@ -733,6 +783,8 @@ async function serveImpl(
         Help.formatRoot(name, {
           aliases: options.aliases,
           description: options.description,
+          globalAlias: options.globalAlias,
+          globals: options.globals,
           version: options.version,
           commands: collectHelpCommands(commands),
           root: true,
@@ -776,6 +828,8 @@ async function serveImpl(
             args: cmd.args,
             env: cmd.env,
             envSource: options.env,
+            globalAlias: options.globalAlias,
+            globals: options.globals,
             hint: cmd.hint,
             options: cmd.options,
             examples: formatExamples(cmd.examples),
@@ -789,6 +843,8 @@ async function serveImpl(
           Help.formatRoot(helpName, {
             aliases: isRoot ? options.aliases : undefined,
             description: helpDesc,
+            globalAlias: isRoot ? options.globalAlias : undefined,
+            globals: isRoot ? options.globals : undefined,
             version: isRoot ? options.version : undefined,
             commands: collectHelpCommands(helpCmds),
             root: isRoot,
@@ -812,6 +868,8 @@ async function serveImpl(
           args: cmd.args,
           env: cmd.env,
           envSource: options.env,
+          globalAlias: options.globalAlias,
+          globals: options.globals,
           hint: cmd.hint,
           options: cmd.options,
           examples: formatExamples(cmd.examples),
@@ -828,6 +886,8 @@ async function serveImpl(
     writeln(
       Help.formatRoot(`${name} ${resolved.path}`, {
         description: resolved.description,
+        globalAlias: options.globalAlias,
+        globals: options.globals,
         commands: collectHelpCommands(resolved.commands),
       }),
     )
@@ -974,6 +1034,7 @@ async function serveImpl(
           command: path,
           env: cliEnv,
           error: errorFn,
+          globals: parsedGlobals,
           name,
           set(key: string, value: unknown) { varsMap[key] = value },
           var: varsMap,
@@ -1058,6 +1119,7 @@ async function serveImpl(
       agent: !human,
       args,
       env,
+      globals: parsedGlobals,
       name,
       options: parsedOptions,
       ok: okFn,
@@ -1143,6 +1205,7 @@ async function serveImpl(
         command: path,
         env: cliEnv,
         error: errorFn,
+        globals: parsedGlobals,
         name,
         set(key: string, value: unknown) {
           varsMap[key] = value
@@ -1199,7 +1262,7 @@ async function serveImpl(
     }
 
     if (human && !formatExplicit && error instanceof ValidationError) {
-      writeln(formatHumanValidationError(name, path, command, error, options.env))
+      writeln(formatHumanValidationError(name, path, command, error, options.env, options.globals, options.globalAlias))
       exit(1)
       return
     }
@@ -1216,6 +1279,8 @@ function formatHumanValidationError(
   command: CommandDefinition<any, any, any>,
   error: ValidationError,
   envSource?: Record<string, string | undefined>,
+  globals?: z.ZodObject<any>,
+  globalAlias?: Record<string, string>,
 ): string {
   const lines: string[] = []
   for (const fe of error.fieldErrors) lines.push(`Error: missing required argument <${fe.path}>`)
@@ -1228,6 +1293,8 @@ function formatHumanValidationError(
       args: command.args,
       env: command.env,
       envSource,
+      globalAlias,
+      globals,
       hint: command.hint,
       options: command.options,
       examples: formatExamples(command.examples),
@@ -1338,6 +1405,10 @@ declare namespace serveImpl {
     envSchema?: z.ZodObject<any> | undefined
     /** CLI-level default output format. */
     format?: Formatter.Format | undefined
+    /** Map of global option names to single-char aliases. */
+    globalAlias?: Record<string, string> | undefined
+    /** Zod schema for global options/flags. */
+    globals?: z.ZodObject<any> | undefined
     /** Middleware handlers registered on the root CLI. */
     middlewares?: MiddlewareHandler[] | undefined
     /** CLI-level default output policy. */
@@ -1776,10 +1847,11 @@ function formatCta(name: string, cta: Cta): FormattedCta {
 }
 
 /** @internal Builds the `--llms` manifest from the command tree. */
-function buildManifest(commands: Map<string, CommandEntry>, prefix: string[] = []) {
+function buildManifest(commands: Map<string, CommandEntry>, prefix: string[] = [], globals?: z.ZodObject<any>) {
   return {
     version: 'incur.v1',
     commands: collectCommands(commands, prefix).sort((a, b) => a.name.localeCompare(b.name)),
+    ...(globals ? { globals: Schema.toJsonSchema(globals) } : undefined),
   }
 }
 
@@ -2004,6 +2076,7 @@ type CommandDefinition<
   output extends z.ZodType | undefined = undefined,
   vars extends z.ZodObject<any> | undefined = undefined,
   cliEnv extends z.ZodObject<any> | undefined = undefined,
+  globals extends z.ZodObject<any> | undefined = undefined,
 > = {
   /** Map of option names to single-char aliases. */
   alias?: options extends z.ZodObject<any>
@@ -2035,7 +2108,7 @@ type CommandDefinition<
    */
   outputPolicy?: OutputPolicy | undefined
   /** Middleware that runs only for this command, after root and group middleware. */
-  middleware?: MiddlewareHandler<vars, cliEnv>[] | undefined
+  middleware?: MiddlewareHandler<vars, cliEnv, globals>[] | undefined
   /** Alternative usage patterns shown in help output. */
   usage?: Usage<args, options>[] | undefined
   /** The command handler. Return a value for single-return, or use `async *run` to stream chunks. */
@@ -2055,6 +2128,8 @@ type CommandDefinition<
       message: string
       retryable?: boolean | undefined
     }) => never
+    /** Parsed global options. */
+    globals: InferGlobals<globals>
     /** Return a success result with optional metadata (e.g. CTAs). */
     ok: (data: InferReturn<output>, meta?: { cta?: CtaBlock | undefined }) => never
     options: InferOutput<options>

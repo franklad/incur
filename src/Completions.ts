@@ -50,6 +50,7 @@ export function complete(
   rootCommand: CommandEntry | undefined,
   argv: string[],
   index: number,
+  globals?: { schema: z.ZodObject<any>; alias?: Record<string, string> | undefined },
 ): Candidate[] {
   const current = argv[index] ?? ''
 
@@ -74,7 +75,7 @@ export function complete(
 
   const candidates: Candidate[] = []
 
-  // If cursor word starts with '-', suggest options from the active leaf command
+  // If cursor word starts with '-', suggest options from the active leaf command + globals
   if (current.startsWith('-')) {
     const leaf = scope.leaf
     if (leaf?.options) {
@@ -88,6 +89,24 @@ export function complete(
       // Short aliases
       if (leaf.alias)
         for (const [name, short] of Object.entries(leaf.alias)) {
+          const flag = `-${short}`
+          if (flag.startsWith(current)) {
+            const desc = descriptionOf(shape[name])
+            candidates.push({ value: flag, description: desc })
+          }
+        }
+    }
+    // Global options
+    if (globals?.schema) {
+      const shape = globals.schema.shape as Record<string, any>
+      for (const key of Object.keys(shape)) {
+        const kebab = key.replace(/[A-Z]/g, (c: string) => `-${c.toLowerCase()}`)
+        const flag = `--${kebab}`
+        if (flag.startsWith(current))
+          candidates.push({ value: flag, description: descriptionOf(shape[key]) })
+      }
+      if (globals.alias)
+        for (const [name, short] of Object.entries(globals.alias)) {
           const flag = `-${short}`
           if (flag.startsWith(current)) {
             const desc = descriptionOf(shape[name])

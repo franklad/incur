@@ -2640,3 +2640,230 @@ describe('fetch', async () => {
     expect(output).toContain('Proxy to API')
   })
 })
+
+describe('globals', () => {
+  test('globals are parsed and available in middleware', async () => {
+    let captured: unknown
+    const cli = Cli.create('test', {
+      globals: z.object({
+        apiKey: z.string().optional(),
+        network: z.enum(['mainnet', 'devnet']).default('mainnet'),
+      }),
+      globalAlias: { apiKey: 'k' },
+    })
+    cli.use(async (c, next) => {
+      captured = c.globals
+      await next()
+    })
+    cli.command('status', {
+      run() {
+        return { ok: true }
+      },
+    })
+    await serve(cli, ['--api-key', 'sk-xxx', '--network', 'devnet', 'status'])
+    expect(captured).toEqual({ apiKey: 'sk-xxx', network: 'devnet' })
+  })
+
+  test('globals are available in command run context', async () => {
+    let captured: unknown
+    const cli = Cli.create('test', {
+      globals: z.object({
+        apiKey: z.string().optional(),
+        network: z.enum(['mainnet', 'devnet']).default('mainnet'),
+      }),
+    })
+    cli.command('status', {
+      run(c) {
+        captured = c.globals
+        return { ok: true }
+      },
+    })
+    await serve(cli, ['status', '--api-key', 'sk-xxx'])
+    expect(captured).toEqual({ apiKey: 'sk-xxx', network: 'mainnet' })
+  })
+
+  test('globals aliases work (-k for --api-key)', async () => {
+    let captured: unknown
+    const cli = Cli.create('test', {
+      globals: z.object({ apiKey: z.string().optional() }),
+      globalAlias: { apiKey: 'k' },
+    })
+    cli.command('status', {
+      run(c) {
+        captured = c.globals
+        return { ok: true }
+      },
+    })
+    await serve(cli, ['status', '-k', 'sk-xxx'])
+    expect(captured).toEqual({ apiKey: 'sk-xxx' })
+  })
+
+  test('globals with defaults work when not provided', async () => {
+    let captured: unknown
+    const cli = Cli.create('test', {
+      globals: z.object({
+        network: z.enum(['mainnet', 'devnet']).default('mainnet'),
+      }),
+    })
+    cli.command('status', {
+      run(c) {
+        captured = c.globals
+        return { ok: true }
+      },
+    })
+    await serve(cli, ['status'])
+    expect(captured).toEqual({ network: 'mainnet' })
+  })
+
+  test('globals are stripped from argv before command routing', async () => {
+    let captured: unknown
+    const cli = Cli.create('test', {
+      globals: z.object({ apiKey: z.string().optional() }),
+    })
+    cli.command('status', {
+      args: z.object({ host: z.string().optional() }),
+      run(c) {
+        captured = c.args
+        return { ok: true }
+      },
+    })
+    await serve(cli, ['--api-key', 'sk-xxx', 'status', 'example.com'])
+    expect(captured).toEqual({ host: 'example.com' })
+  })
+
+  test('globals appear in --help output', async () => {
+    const cli = Cli.create('test', {
+      globals: z.object({
+        apiKey: z.string().optional().describe('API key'),
+        network: z.enum(['mainnet', 'devnet']).default('mainnet').describe('Network'),
+      }),
+      globalAlias: { apiKey: 'k' },
+    })
+    cli.command('status', {
+      description: 'Show status',
+      run() {
+        return { ok: true }
+      },
+    })
+    const { output } = await serve(cli, ['--help'])
+    expect(output).toContain('--api-key, -k <string>')
+    expect(output).toContain('API key')
+    expect(output).toContain('--network <value>')
+    expect(output).toContain('Network')
+  })
+
+  test('globals appear in subcommand --help output', async () => {
+    const cli = Cli.create('test', {
+      globals: z.object({
+        apiKey: z.string().optional().describe('API key'),
+      }),
+    })
+    cli.command('status', {
+      description: 'Show status',
+      run() {
+        return { ok: true }
+      },
+    })
+    const { output } = await serve(cli, ['status', '--help'])
+    expect(output).toContain('--api-key <string>')
+    expect(output).toContain('API key')
+  })
+
+  test('globals appear in --llms manifest', async () => {
+    const cli = Cli.create('test', {
+      globals: z.object({
+        apiKey: z.string().optional().describe('API key'),
+      }),
+    })
+    cli.command('status', {
+      description: 'Show status',
+      run() {
+        return { ok: true }
+      },
+    })
+    const { output } = await serve(cli, ['--llms', '--format', 'json'])
+    const manifest = JSON.parse(output)
+    expect(manifest.globals).toBeDefined()
+    expect(manifest.globals.properties.apiKey).toBeDefined()
+  })
+
+  test('globals validation error shows helpful message', async () => {
+    const cli = Cli.create('test', {
+      globals: z.object({
+        network: z.enum(['mainnet', 'devnet']),
+      }),
+    })
+    cli.command('status', {
+      run() {
+        return { ok: true }
+      },
+    })
+    const { output, exitCode } = await serve(cli, ['status', '--network', 'invalid'])
+    expect(exitCode).toBe(1)
+    expect(output).toContain('Invalid option')
+  })
+
+  test('globals work with subcommands', async () => {
+    let captured: unknown
+    const cli = Cli.create('test', {
+      globals: z.object({ apiKey: z.string().optional() }),
+    })
+    const sub = Cli.create('db', { description: 'Database commands' })
+    sub.command('migrate', {
+      run(c) {
+        captured = c.globals
+        return { ok: true }
+      },
+    })
+    cli.command(sub)
+    await serve(cli, ['--api-key', 'sk-xxx', 'db', 'migrate'])
+    expect(captured).toEqual({ apiKey: 'sk-xxx' })
+  })
+
+  test('globals position is flexible (before or after subcommand)', async () => {
+    let captured1: unknown
+    let captured2: unknown
+
+    const makeCli = (cb: (g: unknown) => void) => {
+      const cli = Cli.create('test', {
+        globals: z.object({ apiKey: z.string().optional() }),
+      })
+      cli.command('status', {
+        run(c) {
+          cb(c.globals)
+          return { ok: true }
+        },
+      })
+      return cli
+    }
+
+    const cli1 = makeCli((g) => { captured1 = g })
+    await serve(cli1, ['--api-key', 'sk-xxx', 'status'])
+
+    const cli2 = makeCli((g) => { captured2 = g })
+    await serve(cli2, ['status', '--api-key', 'sk-xxx'])
+
+    expect(captured1).toEqual({ apiKey: 'sk-xxx' })
+    expect(captured1).toEqual(captured2)
+  })
+
+  test('builtin name collision throws at create time', () => {
+    expect(() =>
+      Cli.create('test', {
+        globals: z.object({ verbose: z.boolean().default(false) }),
+      }),
+    ).toThrow(/conflicts with built-in flag/)
+
+    expect(() =>
+      Cli.create('test', {
+        globals: z.object({ help: z.boolean().default(false) }),
+      }),
+    ).toThrow(/conflicts with built-in flag/)
+
+    expect(() =>
+      Cli.create('test', {
+        globals: z.object({ format: z.string().optional() }),
+      }),
+    ).toThrow(/conflicts with built-in flag/)
+  })
+})

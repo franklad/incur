@@ -27,7 +27,7 @@ export function formatRoot(name: string, options: formatRoot.Options = {}): stri
     }
   }
 
-  lines.push(...globalOptionsLines(root))
+  lines.push(...globalOptionsLines(root, options.globals, options.globalAlias))
 
   return lines.join('\n')
 }
@@ -40,6 +40,10 @@ export declare namespace formatRoot {
     commands?: { name: string; description?: string | undefined }[] | undefined
     /** A short description of the CLI or group. */
     description?: string | undefined
+    /** Map of global option names to single-char aliases. */
+    globalAlias?: Record<string, string> | undefined
+    /** Zod schema for custom global options. */
+    globals?: z.ZodObject<any> | undefined
     /** Show root-level built-in commands and flags. */
     root?: boolean | undefined
     /** CLI version string. */
@@ -65,6 +69,10 @@ export declare namespace formatCommand {
     envSource?: Record<string, string | undefined> | undefined
     /** Formatted usage examples. */
     examples?: { command: string; description?: string }[] | undefined
+    /** Map of global option names to single-char aliases. */
+    globalAlias?: Record<string, string> | undefined
+    /** Zod schema for custom global options. */
+    globals?: z.ZodObject<any> | undefined
     /** Plain text hint displayed after examples and before global options. */
     hint?: string | undefined
     /** Zod schema for named options/flags. */
@@ -195,7 +203,7 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
     }
   }
 
-  lines.push(...globalOptionsLines(root))
+  lines.push(...globalOptionsLines(root, options.globals, options.globalAlias))
 
   // Environment Variables
   if (env) {
@@ -308,7 +316,11 @@ function toKebab(str: string): string {
 }
 
 /** Renders the built-in commands and global options block. Root-only items are hidden for subcommands. */
-function globalOptionsLines(root = false): string[] {
+function globalOptionsLines(
+  root = false,
+  globals?: z.ZodObject<any>,
+  globalAlias?: Record<string, string>,
+): string[] {
   const lines: string[] = []
 
   if (root) {
@@ -325,7 +337,10 @@ function globalOptionsLines(root = false): string[] {
     )
   }
 
-  const flags = [
+  // Custom global options from globals schema
+  const customEntries = globals ? optionEntries(globals, globalAlias) : []
+
+  const builtinFlags = [
     { flag: '--format <toon|json|yaml|md|jsonl>', desc: 'Output format' },
     { flag: '--help', desc: 'Show help' },
     { flag: '--llms', desc: 'Print LLM-readable manifest' },
@@ -333,11 +348,23 @@ function globalOptionsLines(root = false): string[] {
     { flag: '--verbose', desc: 'Show full output envelope' },
     ...(root ? [{ flag: '--version', desc: 'Show version' }] : []),
   ]
-  const maxLen = Math.max(...flags.map((f) => f.flag.length))
+
+  const allFlags = [
+    ...customEntries.map((e) => ({
+      flag: e.flag,
+      desc:
+        e.defaultValue !== undefined
+          ? `${e.description} (default: ${e.defaultValue})`
+          : e.description,
+    })),
+    ...builtinFlags,
+  ]
+
+  const maxLen = Math.max(...allFlags.map((f) => f.flag.length))
   lines.push(
     '',
     'Global Options:',
-    ...flags.map((f) => `  ${f.flag}${' '.repeat(maxLen - f.flag.length)}  ${f.desc}`),
+    ...allFlags.map((f) => `  ${f.flag}${' '.repeat(maxLen - f.flag.length)}  ${f.desc}`),
   )
 
   return lines

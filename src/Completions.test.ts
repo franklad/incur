@@ -172,6 +172,28 @@ describe('complete', () => {
     expect(build?.description).toBe('Build the project')
   })
 
+  test('suggests global options alongside command options', () => {
+    const cli = makeCli()
+    const commands = Cli.toCommands.get(cli)!
+    const globals = {
+      schema: z.object({
+        apiKey: z.string().optional().describe('API key'),
+      }),
+      alias: { apiKey: 'k' },
+    }
+    // With '--' prefix, only long flags match
+    const candidates = Completions.complete(commands, undefined, ['mycli', 'build', '--'], 2, globals)
+    const values = candidates.map((c) => c.value)
+    expect(values).toContain('--target')
+    expect(values).toContain('--api-key')
+
+    // With '-' prefix, short aliases also match
+    const candidates2 = Completions.complete(commands, undefined, ['mycli', 'build', '-'], 2, globals)
+    const values2 = candidates2.map((c) => c.value)
+    expect(values2).toContain('-k')
+    expect(values2).toContain('-w')
+  })
+
   test('marks groups with noSpace', () => {
     const cli = makeCli()
     const commands = Cli.toCommands.get(cli)!
