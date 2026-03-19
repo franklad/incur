@@ -8,6 +8,7 @@ import * as Fetch from './Fetch.js'
 import * as Filter from './Filter.js'
 import * as Formatter from './Formatter.js'
 import * as Help from './Help.js'
+import { builtinCommands, type CommandMeta, type Shell, shells } from './internal/command.js'
 import * as Command from './internal/command.js'
 import { detectRunner } from './internal/pm.js'
 import type { OneOf } from './internal/types.js'
@@ -456,7 +457,7 @@ async function serveImpl(
   }
 
   // COMPLETE: dynamic shell completions (called by shell hook at tab-press)
-  const completeShell = process.env.COMPLETE as Completions.Shell | undefined
+  const completeShell = process.env.COMPLETE as Shell | undefined
   if (completeShell) {
     // Remove separator `--` from argv
     const sepIdx = argv.indexOf('--')
@@ -468,6 +469,26 @@ async function serveImpl(
     } else {
       const index = Number(process.env._COMPLETE_INDEX ?? words.length - 1)
       const candidates = Completions.complete(commands, options.rootCommand, words, index)
+      // Add built-in commands (completions, mcp, skills) to completions
+      const current = words[index] ?? ''
+      const nonFlags = words.slice(0, index).filter((w) => !w.startsWith('-'))
+      if (nonFlags.length <= 1) {
+        for (const b of builtinCommands) {
+          if (b.name.startsWith(current) && !candidates.some((c) => c.value === b.name))
+            candidates.push({
+              value: b.name,
+              description: b.description,
+              ...(b.subcommands ? { noSpace: true } : undefined),
+            })
+        }
+      } else if (nonFlags.length === 2) {
+        const parent = nonFlags[nonFlags.length - 1]
+        const builtin = builtinCommands.find((b) => b.name === parent && b.subcommands)
+        if (builtin?.subcommands)
+          for (const sub of builtin.subcommands)
+            if (sub.name.startsWith(current))
+              candidates.push({ value: sub.name, description: sub.description })
+      }
       const out = Completions.format(completeShell, candidates)
       if (out) stdout(out)
     }
@@ -553,73 +574,48 @@ async function serveImpl(
     // not a completions invocation
     return -1
   })()
+  // TODO: refactor built-in command handlers (completions, skills, mcp) into a generic dispatch loop on `builtinCommands`
   if (completionsIdx !== -1 && filtered[completionsIdx] === 'completions') {
-    if (help) {
+    const shell = filtered[completionsIdx + 1]
+    if (help || !shell) {
+      const b = builtinCommands.find((c) => c.name === 'completions')!
       writeln(
-        [
-          `${name} completions — Generate shell completion script`,
-          '',
-          `Usage: ${name} completions <shell>`,
-          '',
-          'Shells:',
-          '  bash',
-          '  fish',
-          '  nushell',
-          '  zsh',
-          '',
-          'Setup:',
-          ...(() => {
-            const rows = [
-              ['bash', `eval "$(${name} completions bash)"`, '# add to ~/.bashrc'],
-              ['zsh', `eval "$(${name} completions zsh)"`, '# add to ~/.zshrc'],
-              ['fish', `${name} completions fish | source`, '# add to ~/.config/fish/config.fish'],
-              ['nushell', `see \`${name} completions nushell\``, '# add to config.nu'],
-            ]
-            const shellW = Math.max(...rows.map((r) => r[0]!.length))
-            const cmdW = Math.max(...rows.map((r) => r[1]!.length))
-            return rows.map(
-              ([shell, cmd, comment]) =>
-                `  ${shell!.padEnd(shellW)}  ${cmd!.padEnd(cmdW)}  ${comment}`,
-            )
-          })(),
-        ].join('\n'),
+        Help.formatCommand(`${name} completions`, {
+          args: b.args,
+          description: b.description,
+          hideGlobalOptions: true,
+          hint: b.hint?.(name),
+        }),
       )
       return
     }
-    const shell = filtered[completionsIdx + 1]
-    if (!shell || !['bash', 'fish', 'nushell', 'zsh'].includes(shell)) {
+    if (!shells.includes(shell as any)) {
       writeln(
         formatHumanError({
           code: 'INVALID_SHELL',
-          message: shell
-            ? `Unknown shell '${shell}'. Supported: bash, fish, nushell, zsh`
-            : `Missing shell argument. Usage: ${name} completions <bash|fish|nushell|zsh>`,
+          message: `Unknown shell '${shell}'. Supported: ${shells.join(', ')}`,
         }),
       )
       exit(1)
       return
     }
     const names = [name, ...(options.aliases ?? [])]
-    writeln(names.map((n) => Completions.register(shell as Completions.Shell, n)).join('\n'))
+    writeln(names.map((n) => Completions.register(shell as Shell, n)).join('\n'))
     return
   }
 
   // skills add: generate skill files and install via `<pm>x skills add` (only when sync is configured)
   const skillsIdx =
     filtered[0] === 'skills' ? 0 : filtered[0] === name && filtered[1] === 'skills' ? 1 : -1
-  if (skillsIdx !== -1 && filtered[skillsIdx] === 'skills' && filtered[skillsIdx + 1] === 'add') {
+  if (skillsIdx !== -1 && filtered[skillsIdx] === 'skills') {
+    if (filtered[skillsIdx + 1] !== 'add') {
+      const b = builtinCommands.find((c) => c.name === 'skills')!
+      writeln(formatBuiltinHelp(name, b))
+      return
+    }
     if (help) {
-      writeln(
-        [
-          `${name} skills add — Sync skill files to agents`,
-          '',
-          `Usage: ${name} skills add [options]`,
-          '',
-          'Options:',
-          '  --depth <number>  Grouping depth for skill files (default: 1)',
-          '  --no-global       Install to project instead of globally',
-        ].join('\n'),
-      )
+      const b = builtinCommands.find((c) => c.name === 'skills')!
+      writeln(formatBuiltinSubcommandHelp(name, b, 'add'))
       return
     }
     const rest = filtered.slice(skillsIdx + 2)
@@ -683,20 +679,15 @@ async function serveImpl(
 
   // mcp add: register CLI as MCP server via `npx add-mcp`
   const mcpIdx = filtered[0] === 'mcp' ? 0 : filtered[0] === name && filtered[1] === 'mcp' ? 1 : -1
-  if (mcpIdx !== -1 && filtered[mcpIdx] === 'mcp' && filtered[mcpIdx + 1] === 'add') {
+  if (mcpIdx !== -1 && filtered[mcpIdx] === 'mcp') {
+    if (filtered[mcpIdx + 1] !== 'add') {
+      const b = builtinCommands.find((c) => c.name === 'mcp')!
+      writeln(formatBuiltinHelp(name, b))
+      return
+    }
     if (help) {
-      writeln(
-        [
-          `${name} mcp add — Register as MCP server for your agent`,
-          '',
-          `Usage: ${name} mcp add [options]`,
-          '',
-          'Options:',
-          '  -c, --command <cmd>  Override the command agents will run (e.g. "pnpm my-cli --mcp")',
-          '  --no-global          Install to project instead of globally',
-          '  --agent <agent>      Target a specific agent (e.g. claude-code, cursor)',
-        ].join('\n'),
-      )
+      const b = builtinCommands.find((c) => c.name === 'mcp')!
+      writeln(formatBuiltinSubcommandHelp(name, b, 'add'))
       return
     }
     const rest = filtered.slice(mcpIdx + 2)
@@ -1286,7 +1277,9 @@ async function serveImpl(
       error: {
         code: result.error.code,
         message: result.error.message,
-        ...(result.error.retryable !== undefined ? { retryable: result.error.retryable } : undefined),
+        ...(result.error.retryable !== undefined
+          ? { retryable: result.error.retryable }
+          : undefined),
         ...(result.error.fieldErrors ? { fieldErrors: result.error.fieldErrors } : undefined),
       },
       meta: {
@@ -1607,7 +1600,9 @@ async function executeCommand(
         error: {
           code: result.error.code,
           message: result.error.message,
-          ...(result.error.retryable !== undefined ? { retryable: result.error.retryable } : undefined),
+          ...(result.error.retryable !== undefined
+            ? { retryable: result.error.retryable }
+            : undefined),
         },
         meta: {
           command: path,
@@ -1864,6 +1859,29 @@ function collectHelpCommands(
     result.push({ name, description: entry.description })
   }
   return result.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** @internal Formats group-level help for a built-in command (e.g. `cli skills`). */
+function formatBuiltinHelp(cli: string, builtin: (typeof builtinCommands)[number]): string {
+  return Help.formatRoot(`${cli} ${builtin.name}`, {
+    description: builtin.description,
+    commands: builtin.subcommands?.map((s) => ({ name: s.name, description: s.description })),
+  })
+}
+
+/** @internal Formats subcommand-level help for a built-in command (e.g. `cli skills add --help`). */
+function formatBuiltinSubcommandHelp(
+  cli: string,
+  builtin: (typeof builtinCommands)[number],
+  subName: string,
+): string {
+  const sub = builtin.subcommands?.find((s) => s.name === subName)
+  return Help.formatCommand(`${cli} ${builtin.name} ${subName}`, {
+    alias: sub?.alias,
+    description: sub?.description,
+    hideGlobalOptions: true,
+    options: sub?.options,
+  })
 }
 
 /** @internal Formats help text for a fetch gateway command. */
@@ -2487,15 +2505,9 @@ type CommandDefinition<
   output extends z.ZodType | undefined = undefined,
   vars extends z.ZodObject<any> | undefined = undefined,
   cliEnv extends z.ZodObject<any> | undefined = undefined,
-> = {
-  /** Map of option names to single-char aliases. */
-  alias?: options extends z.ZodObject<any>
-    ? Partial<Record<keyof z.output<options>, string>>
-    : Record<string, string> | undefined
+> = CommandMeta<options> & {
   /** Zod schema for positional arguments. */
   args?: args | undefined
-  /** A short description of what the command does. */
-  description?: string | undefined
   /** Zod schema for environment variables. Keys are the variable names (e.g. `NPM_TOKEN`). */
   env?: env | undefined
   /** Usage examples for this command. */
@@ -2504,8 +2516,6 @@ type CommandDefinition<
   format?: Formatter.Format | undefined
   /** Plain text hint displayed after examples and before global options. */
   hint?: string | undefined
-  /** Zod schema for named options/flags. */
-  options?: options | undefined
   /** Zod schema for the command's return value. */
   output?: output | undefined
   /**

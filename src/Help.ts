@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { builtinCommands } from './internal/command.js'
+
 /** Formats help text for a router CLI or command group. */
 export function formatRoot(name: string, options: formatRoot.Options = {}): string {
   const { aliases, description, version, commands = [], root = false } = options
@@ -67,6 +69,8 @@ export declare namespace formatCommand {
     examples?: { command: string; description?: string }[] | undefined
     /** Plain text hint displayed after examples and before global options. */
     hint?: string | undefined
+    /** Hide global options section. */
+    hideGlobalOptions?: boolean | undefined
     /** Zod schema for named options/flags. */
     options?: z.ZodObject<any> | undefined
     /** Show root-level built-in commands and flags. */
@@ -195,7 +199,7 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
     }
   }
 
-  lines.push(...globalOptionsLines(root))
+  if (!options.hideGlobalOptions) lines.push(...globalOptionsLines(root))
 
   // Environment Variables
   if (env) {
@@ -223,8 +227,11 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
 function buildSynopsis(name: string, args?: z.ZodObject<any>): string {
   if (!args) return name
   const parts = [name]
-  for (const [key, schema] of Object.entries(args.shape))
-    parts.push((schema as z.ZodType)._zod.optout === 'optional' ? `[${key}]` : `<${key}>`)
+  for (const [key, schema] of Object.entries(args.shape)) {
+    const type = resolveTypeName(schema)
+    const label = type.includes('|') ? type : key
+    parts.push((schema as z.ZodType)._zod.optout === 'optional' ? `[${label}]` : `<${label}>`)
+  }
   return parts.join(' ')
 }
 
@@ -330,15 +337,19 @@ function globalOptionsLines(root = false): string[] {
   const lines: string[] = []
 
   if (root) {
-    const builtins = [
-      { name: 'completions', desc: 'Generate shell completion script' },
-      { name: 'mcp add', desc: 'Register as MCP server' },
-      { name: 'skills add', desc: 'Sync skill files to agents' },
-    ]
+    const builtins = builtinCommands.flatMap((b) => {
+      if (!b.subcommands) return [{ name: b.name, desc: b.description }]
+      if (b.subcommands.length === 1)
+        return [
+          { name: `${b.name} ${b.subcommands[0]!.name}`, desc: b.subcommands[0]!.description },
+        ]
+      const names = b.subcommands.map((s) => s.name).join(', ')
+      return [{ name: b.name, desc: `${b.description} (${names})` }]
+    })
     const maxCmd = Math.max(...builtins.map((b) => b.name.length))
     lines.push(
       '',
-      'Built-in Commands:',
+      'Integrations:',
       ...builtins.map((b) => `  ${b.name}${' '.repeat(maxCmd - b.name.length)}  ${b.desc}`),
     )
   }

@@ -1350,7 +1350,7 @@ describe('help', () => {
       Commands:
         ping  Health check
 
-      Built-in Commands:
+      Integrations:
         completions  Generate shell completion script
         mcp add      Register as MCP server
         skills add   Sync skill files to agents
@@ -1388,7 +1388,7 @@ describe('help', () => {
       Commands:
         ping  Health check
 
-      Built-in Commands:
+      Integrations:
         completions  Generate shell completion script
         mcp add      Register as MCP server
         skills add   Sync skill files to agents
@@ -1551,7 +1551,7 @@ describe('help', () => {
       Commands:
         ping  Ping
 
-      Built-in Commands:
+      Integrations:
         completions  Generate shell completion script
         mcp add      Register as MCP server
         skills add   Sync skill files to agents
@@ -1835,6 +1835,76 @@ describe('env', () => {
 
     await serve(cli, ['deploy'], { env: { DEBUG: 'true', PORT: '8080' } })
     expect(receivedEnv).toEqual({ DEBUG: true, PORT: 8080 })
+  })
+})
+
+describe('built-in commands', () => {
+  test('bare completions shows help', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['completions'])
+    expect(output).toContain('Generate shell completion script')
+  })
+
+  test('completions --help shows help', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['completions', '--help'])
+    expect(output).toContain('test completions')
+    expect(output).toContain('Generate shell completion script')
+  })
+
+  test('bare mcp shows help with subcommands', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['mcp'])
+    expect(output).toContain('test mcp')
+    expect(output).toContain('Register as MCP server')
+    expect(output).toContain('add')
+  })
+
+  test('mcp --help shows help with subcommands', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['mcp', '--help'])
+    expect(output).toContain('test mcp')
+    expect(output).toContain('add')
+  })
+
+  test('mcp add --help shows options', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['mcp', 'add', '--help'])
+    expect(output).toContain('test mcp add')
+    expect(output).toContain('--command')
+    expect(output).toContain('--no-global')
+    expect(output).toContain('--agent')
+  })
+
+  test('bare skills shows help with subcommands', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['skills'])
+    expect(output).toContain('test skills')
+    expect(output).toContain('Sync skill files to agents')
+    expect(output).toContain('add')
+  })
+
+  test('skills --help shows help with subcommands', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['skills', '--help'])
+    expect(output).toContain('test skills')
+    expect(output).toContain('add')
+  })
+
+  test('skills add --help shows options', async () => {
+    const cli = Cli.create('test')
+    cli.command('ping', { run: () => ({ pong: true }) })
+    const { output } = await serve(cli, ['skills', 'add', '--help'])
+    expect(output).toContain('test skills add')
+    expect(output).toContain('--depth')
+    expect(output).toContain('--no-global')
   })
 })
 
@@ -3390,7 +3460,8 @@ describe('fetch', () => {
       vars: z.object({ role: z.string().default('none') }),
     })
     cli.command(sub)
-    expect(await fetchJson(cli, new Request('http://localhost/admin/status'))).toMatchInlineSnapshot(`
+    expect(await fetchJson(cli, new Request('http://localhost/admin/status')))
+      .toMatchInlineSnapshot(`
       {
         "body": {
           "data": {
@@ -3435,8 +3506,7 @@ describe('fetch', () => {
   test('cta block is propagated', async () => {
     const cli = Cli.create('test')
     cli.command('done', {
-      run: (c) =>
-        c.ok({ id: 1 }, { cta: { commands: ['list'], description: 'Next steps:' } }),
+      run: (c) => c.ok({ id: 1 }, { cta: { commands: ['list'], description: 'Next steps:' } }),
     })
     const { body } = await fetchJson(cli, new Request('http://localhost/done'))
     expect(body.ok).toBe(true)
