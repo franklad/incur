@@ -462,4 +462,56 @@ describe('parseGlobals', () => {
       expect.objectContaining({ name: 'Incur.ParseError' }),
     )
   })
+
+  test('stacked short: count in non-last position', () => {
+    const schema = z.object({
+      verbose: z.number().default(0).meta({ count: true }),
+      recursive: z.boolean().default(false),
+    })
+    const result = Parser.parseGlobals(['-vr'], schema, { verbose: 'v', recursive: 'r' })
+    expect(result.parsed).toEqual({ verbose: 1, recursive: true })
+  })
+
+  test('stacked short: non-boolean in non-last position throws', () => {
+    const schema = z.object({
+      output: z.string(),
+      verbose: z.boolean().default(false),
+    })
+    expect(() => Parser.parseGlobals(['-ov', 'file'], schema, { output: 'o', verbose: 'v' })).toThrow(
+      /must be last/,
+    )
+  })
+
+  test('short flag value-taking as last in stacked alias', () => {
+    const schema = z.object({
+      verbose: z.boolean().default(false),
+      output: z.string(),
+    })
+    const result = Parser.parseGlobals(['-vo', 'file', 'deploy'], schema, {
+      verbose: 'v',
+      output: 'o',
+    })
+    expect(result.parsed).toEqual({ verbose: true, output: 'file' })
+    expect(result.rest).toEqual(['deploy'])
+  })
+
+  test('short flag missing value throws ParseError', () => {
+    const schema = z.object({ output: z.string() })
+    expect(() => Parser.parseGlobals(['-o'], schema, { output: 'o' })).toThrow(
+      expect.objectContaining({ name: 'Incur.ParseError' }),
+    )
+  })
+
+  test('known --no- negation for boolean global', () => {
+    const schema = z.object({ verbose: z.boolean().default(true) })
+    const result = Parser.parseGlobals(['--no-verbose', 'deploy'], schema)
+    expect(result.parsed).toEqual({ verbose: false })
+    expect(result.rest).toEqual(['deploy'])
+  })
+
+  test('known --flag=value with setOption', () => {
+    const schema = z.object({ tag: z.array(z.string()).default([]) })
+    const result = Parser.parseGlobals(['--tag=foo', '--tag=bar'], schema)
+    expect(result.parsed).toEqual({ tag: ['foo', 'bar'] })
+  })
 })

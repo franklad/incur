@@ -4637,6 +4637,18 @@ describe('globals', () => {
     ).toThrow(/conflicts with a global alias/)
   })
 
+  test('globals validation error in agent mode outputs toon format', async () => {
+    ;(process.stdout as any).isTTY = false
+    const cli = Cli.create('test', {
+      globals: z.object({ limit: z.number() }),
+    }).command('ping', { run: () => ({}) })
+
+    const { output, exitCode } = await serve(cli, ['--limit', 'abc', 'ping'])
+    expect(exitCode).toBe(1)
+    expect(output).toContain('UNKNOWN')
+    ;(process.stdout as any).isTTY = true
+  })
+
   test('globals appear in --schema output', async () => {
     const cli = Cli.create('test', {
       globals: z.object({
