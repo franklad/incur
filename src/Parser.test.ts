@@ -404,4 +404,62 @@ describe('parseGlobals', () => {
     expect(result.parsed).toEqual({ verbose: true })
     expect(result.rest).toEqual(['deploy', 'contract'])
   })
+
+  test('-- separator: everything after -- passes through to rest including the --', () => {
+    const schema = z.object({ verbose: z.boolean().default(false) })
+    const result = Parser.parseGlobals(
+      ['--verbose', '--', '--unknown', 'positional', '--also-unknown'],
+      schema,
+    )
+    expect(result.parsed).toEqual({ verbose: true })
+    expect(result.rest).toEqual(['--', '--unknown', 'positional', '--also-unknown'])
+  })
+
+  test('stacked short aliases: -rv where both are known boolean globals', () => {
+    const schema = z.object({
+      recursive: z.boolean().default(false),
+      verbose: z.boolean().default(false),
+    })
+    const result = Parser.parseGlobals(['-rv', 'deploy'], schema, {
+      recursive: 'r',
+      verbose: 'v',
+    })
+    expect(result.parsed).toEqual({ recursive: true, verbose: true })
+    expect(result.rest).toEqual(['deploy'])
+  })
+
+  test('count options: --verbose --verbose accumulates', () => {
+    const schema = z.object({ verbose: z.number().default(0).meta({ count: true }) })
+    const result = Parser.parseGlobals(['--verbose', '--verbose', 'deploy'], schema)
+    expect(result.parsed).toEqual({ verbose: 2 })
+    expect(result.rest).toEqual(['deploy'])
+  })
+
+  test('array options: --tag foo --tag bar collects into array', () => {
+    const schema = z.object({ tag: z.array(z.string()).default([]) })
+    const result = Parser.parseGlobals(['--tag', 'foo', '--tag', 'bar', 'deploy'], schema)
+    expect(result.parsed).toEqual({ tag: ['foo', 'bar'] })
+    expect(result.rest).toEqual(['deploy'])
+  })
+
+  test('unknown --no-* flags pass through to rest', () => {
+    const schema = z.object({ verbose: z.boolean().default(false) })
+    const result = Parser.parseGlobals(['--no-color', '--verbose'], schema)
+    expect(result.parsed).toEqual({ verbose: true })
+    expect(result.rest).toEqual(['--no-color'])
+  })
+
+  test('unknown --flag=value passes through as single token', () => {
+    const schema = z.object({ verbose: z.boolean().default(false) })
+    const result = Parser.parseGlobals(['--output=json', '--verbose'], schema)
+    expect(result.parsed).toEqual({ verbose: true })
+    expect(result.rest).toEqual(['--output=json'])
+  })
+
+  test('missing value for known flag throws ParseError', () => {
+    const schema = z.object({ rpcUrl: z.string() })
+    expect(() => Parser.parseGlobals(['--rpc-url'], schema)).toThrow(
+      expect.objectContaining({ name: 'Incur.ParseError' }),
+    )
+  })
 })

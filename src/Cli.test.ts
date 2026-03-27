@@ -4604,6 +4604,39 @@ describe('globals', () => {
     expect(JSON.parse(output)).toEqual({ dryRun: false })
   })
 
+  test('parseGlobals error produces clean error output with exit code 1', async () => {
+    const cli = Cli.create('test', {
+      globals: z.object({ rpcUrl: z.string() }),
+    }).command('ping', { run: () => ({}) })
+
+    const { output, exitCode } = await serve(cli, ['--rpc-url'])
+    expect(exitCode).toBe(1)
+    expect(output).toContain('Missing value for flag')
+  })
+
+  test('global alias collision with -h throws at create() time', () => {
+    expect(() =>
+      Cli.create('test', {
+        globals: z.object({ host: z.string().optional() }),
+        globalAlias: { host: 'h' },
+      }),
+    ).toThrow(/conflicts with a built-in short flag/)
+  })
+
+  test('command alias collision with global alias throws at command() time', () => {
+    const cli = Cli.create('test', {
+      globals: z.object({ rpcUrl: z.string().optional() }),
+      globalAlias: { rpcUrl: 'r' },
+    })
+    expect(() =>
+      cli.command('deploy', {
+        options: z.object({ region: z.string().optional() }),
+        alias: { region: 'r' },
+        run: () => ({}),
+      }),
+    ).toThrow(/conflicts with a global alias/)
+  })
+
   test('globals appear in --schema output', async () => {
     const cli = Cli.create('test', {
       globals: z.object({
