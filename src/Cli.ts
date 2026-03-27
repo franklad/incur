@@ -2450,7 +2450,7 @@ export const toConfigEnabled = new WeakMap<Cli, boolean>()
 const toOutputPolicy = new WeakMap<Cli, OutputPolicy>()
 
 /** Descriptor for a CLI's custom global options schema and aliases. */
-export type GlobalsDescriptor = { schema: z.ZodObject<any>; alias?: Record<string, string> }
+export type GlobalsDescriptor = { schema: z.ZodObject<any>; alias?: Record<string, string> | undefined }
 
 /** @internal Maps CLI instances to their globals schema and alias map. */
 const toGlobals = new WeakMap<Cli, GlobalsDescriptor>()

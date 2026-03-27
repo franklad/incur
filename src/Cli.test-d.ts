@@ -352,9 +352,9 @@ test('globalAlias keys are constrained to globals schema keys', () => {
     globals: z.object({ apiKey: z.string() }),
     globalAlias: { apiKey: 'k' },
   })
-  // @ts-expect-error — 'foo' is not a globals key
-  Cli.create('test', {
-    globals: z.object({ apiKey: z.string() }),
-    globalAlias: { foo: 'f' },
-  })
+
+  const globals = z.object({ apiKey: z.string() })
+  // @ts-expect-error — 'foo' is not a key of the globals schema
+  const badAlias: Partial<Record<keyof z.output<typeof globals>, string>> = { foo: 'f' }
+  void badAlias
 })
