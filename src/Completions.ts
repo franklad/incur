@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 
+import type { GlobalsDescriptor } from './Cli.js'
 import type { Shell } from './internal/command.js'
 import { toKebab } from './internal/helpers.js'
 
@@ -40,11 +41,6 @@ export function register(shell: Shell, name: string): string {
   }
 }
 
-/** Global options descriptor for completion generation. */
-export type GlobalOptions = {
-  alias?: Record<string, string> | undefined
-  schema: z.ZodObject<any>
-}
 
 /**
  * Computes completion candidates for the given argv words and cursor index.
@@ -56,7 +52,7 @@ export function complete(
   rootCommand: CommandEntry | undefined,
   argv: string[],
   index: number,
-  globals?: GlobalOptions | undefined,
+  globals?: GlobalsDescriptor | undefined,
 ): Candidate[] {
   const current = argv[index] ?? ''
 

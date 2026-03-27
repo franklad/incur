@@ -1591,7 +1591,7 @@ declare namespace fetchImpl {
     /** CLI-level env schema. */
     envSchema?: z.ZodObject<any> | undefined
     /** Global options schema and alias map. */
-    globals?: { schema: z.ZodObject<any>; alias?: Record<string, string> } | undefined
+    globals?: GlobalsDescriptor | undefined
     /** Group-level middleware collected during command resolution. */
     groupMiddlewares?: MiddlewareHandler[] | undefined
     mcpHandler?:
@@ -2079,7 +2079,7 @@ declare namespace serveImpl {
     /** CLI-level default output format. */
     format?: Formatter.Format | undefined
     /** Global options schema and alias map. */
-    globals?: { schema: z.ZodObject<any>; alias?: Record<string, string> } | undefined
+    globals?: GlobalsDescriptor | undefined
     /** Middleware handlers registered on the root CLI. */
     middlewares?: MiddlewareHandler[] | undefined
     /** CLI-level default output policy. */
@@ -2449,11 +2449,11 @@ export const toConfigEnabled = new WeakMap<Cli, boolean>()
 /** @internal Maps CLI instances to their output policy. */
 const toOutputPolicy = new WeakMap<Cli, OutputPolicy>()
 
+/** Descriptor for a CLI's custom global options schema and aliases. */
+export type GlobalsDescriptor = { schema: z.ZodObject<any>; alias?: Record<string, string> }
+
 /** @internal Maps CLI instances to their globals schema and alias map. */
-const toGlobals = new WeakMap<
-  Cli,
-  { schema: z.ZodObject<any>; alias?: Record<string, string> }
->()
+const toGlobals = new WeakMap<Cli, GlobalsDescriptor>()
 
 /** @internal Sentinel symbol for `ok()` and `error()` return values. */
 const sentinel = Symbol.for('incur.sentinel')

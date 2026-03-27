@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import type { GlobalsDescriptor } from './Cli.js'
 import { builtinCommands } from './internal/command.js'
 import { toKebab } from './internal/helpers.js'
 
@@ -54,7 +55,7 @@ export declare namespace formatRoot {
     /** A short description of the CLI or group. */
     description?: string | undefined
     /** Custom global options schema and alias map. */
-    globals?: { schema: z.ZodObject<any>; alias?: Record<string, string> } | undefined
+    globals?: GlobalsDescriptor | undefined
     /** Show root-level built-in commands and flags. */
     root?: boolean | undefined
     /** CLI version string. */
@@ -81,7 +82,7 @@ export declare namespace formatCommand {
     /** Override environment variable source for "set:" display. Defaults to `process.env`. */
     envSource?: Record<string, string | undefined> | undefined
     /** Custom global options schema and alias map. */
-    globals?: { schema: z.ZodObject<any>; alias?: Record<string, string> } | undefined
+    globals?: GlobalsDescriptor | undefined
     /** Formatted usage examples. */
     examples?: { command: string; description?: string }[] | undefined
     /** Plain text hint displayed after examples and before global options. */
@@ -350,7 +351,7 @@ function extractDeprecated(schema: unknown): boolean | undefined {
 function globalOptionsLines(
   root = false,
   configFlag?: string,
-  globals?: { schema: z.ZodObject<any>; alias?: Record<string, string> },
+  globals?: GlobalsDescriptor,
 ): string[] {
   const lines: string[] = []
 
