@@ -387,8 +387,8 @@ function globalOptionsLines(root = false, configFlag?: string): string[] {
   return lines
 }
 
-/** Redacts a value, showing only the last 4 characters. */
+/** Redacts a value, showing only the last 4 characters for long values. */
 function redact(value: string): string {
-  if (value.length <= 4) return `****${value.slice(-1)}`
+  if (value.length <= 4) return '****'
   return `****${value.slice(-4)}`
 }
