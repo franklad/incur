@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { defaultEnvSource } from './Parser.js'
 import { builtinCommands } from './internal/command.js'
 import { toKebab } from './internal/helpers.js'
 
@@ -217,7 +218,7 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
       for (const entry of entries) {
         const padding = ' '.repeat(maxLen - entry.name.length)
         const parts: string[] = [entry.description]
-        const source = envSource ?? process.env
+        const source = envSource ?? defaultEnvSource()
         if (entry.name in source) parts.push(`set: ${redact(source[entry.name]!)}`)
         if (entry.defaultValue !== undefined) parts.push(`default: ${entry.defaultValue}`)
         const desc = parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(', ')})` : parts[0]
