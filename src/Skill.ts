@@ -5,7 +5,8 @@ import * as Schema from './Schema.js'
 
 /** Information about a single command, passed to `generate()`. */
 export type CommandInfo = {
-  name: string
+  /** Command name (subcommand path). Omit for root commands. */
+  name?: string | undefined
   description?: string | undefined
   args?: z.ZodObject<any> | undefined
   env?: z.ZodObject<any> | undefined
@@ -48,7 +49,7 @@ export function index(
 
 /** @internal Builds a command signature with arg placeholders. */
 function buildSignature(cli: string, cmd: CommandInfo): string {
-  const base = `${cli} ${cmd.name}`
+  const base = !cmd.name ? cli : `${cli} ${cmd.name}`
   if (!cmd.args) return base
   const shape = cmd.args.shape as Record<string, z.ZodType>
   const json = Schema.toJsonSchema(cmd.args)
@@ -70,14 +71,16 @@ export function generate(
   let lastGroup: string | undefined
 
   for (const cmd of commands) {
-    const segment = cmd.name.split(' ')[0]!
+    const segment = !cmd.name ? '' : cmd.name.split(' ')[0]!
     if (segment !== lastGroup) {
       lastGroup = segment
-      const desc = groups.get(segment)
-      const heading = desc ? `## ${name} ${segment}\n\n${desc}` : `## ${name} ${segment}`
-      sections.push(heading)
+      if (segment) {
+        const desc = groups.get(segment)
+        const heading = desc ? `## ${name} ${segment}\n\n${desc}` : `## ${name} ${segment}`
+        sections.push(heading)
+      }
     }
-    sections.push(renderCommandBody(name, cmd, 3))
+    sections.push(renderCommandBody(name, cmd, segment ? 3 : 2))
   }
 
   return sections.join('\n\n')
@@ -94,6 +97,13 @@ export function split(
 
   const buckets = new Map<string, CommandInfo[]>()
   for (const cmd of commands) {
+    if (!cmd.name) {
+      const key = slugify(name)
+      const bucket = buckets.get(key) ?? []
+      bucket.push(cmd)
+      buckets.set(key, bucket)
+      continue
+    }
     const segments = cmd.name.split(' ')
     const key = segments.slice(0, depth).join('-')
     const bucket = buckets.get(key) ?? []
@@ -104,8 +114,10 @@ export function split(
   return [...buckets.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([dir, cmds]) => {
-      const prefix = cmds[0]!.name.split(' ').slice(0, depth).join(' ')
-      return { dir, content: renderGroup(name, `${name} ${prefix}`, cmds, groups, prefix) }
+      const first = cmds[0]!
+      const prefix = !first.name ? '' : first.name.split(' ').slice(0, depth).join(' ')
+      const title = prefix ? `${name} ${prefix}` : name
+      return { dir, content: renderGroup(name, title, cmds, groups, prefix || undefined) }
     })
 }
 
@@ -127,12 +139,7 @@ function renderGroup(
       ? `${descParts.join('. ')}. Run \`${title} --help\` for usage details.`
       : `Run \`${title} --help\` for usage details.`
 
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '')
-  const fm = ['---', `name: ${slug}`]
+  const fm = ['---', `name: ${slugify(title)}`]
   fm.push(`description: ${description}`)
   fm.push(`requires_bin: ${cli}`)
   fm.push(`command: ${title}`, '---')
@@ -143,7 +150,7 @@ function renderGroup(
 
 /** @internal Renders a command's heading and sections without frontmatter. */
 function renderCommandBody(cli: string, cmd: CommandInfo, level = 1): string {
-  const fullName = `${cli} ${cmd.name}`
+  const fullName = !cmd.name ? cli : `${cli} ${cmd.name}`
   const sections: string[] = []
   const h = (n: number) => '#'.repeat(n)
 
@@ -285,6 +292,15 @@ function schemaToTable(schema: Record<string, unknown>, prefix = ''): string | u
   }
 
   return `| Field | Type | Required | Description |\n|-------|------|----------|-------------|\n${rows.join('\n')}`
+}
+
+/** @internal Converts a string to a lowercase slug (e.g. `"my-cli"` → `"my-cli"`, `"My Tool"` → `"my-tool"`). */
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 /** @internal Resolves a simple type name from a JSON Schema property. */
