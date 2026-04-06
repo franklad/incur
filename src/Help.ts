@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { builtinCommands } from './internal/command.js'
 import { toKebab } from './internal/helpers.js'
+import { defaultEnvSource } from './Parser.js'
 
 /** Formats help text for a router CLI or command group. */
 export function formatRoot(name: string, options: formatRoot.Options = {}): string {
@@ -217,7 +218,7 @@ export function formatCommand(name: string, options: formatCommand.Options = {})
       for (const entry of entries) {
         const padding = ' '.repeat(maxLen - entry.name.length)
         const parts: string[] = [entry.description]
-        const source = envSource ?? process.env
+        const source = envSource ?? defaultEnvSource()
         if (entry.name in source) parts.push(`set: ${redact(source[entry.name]!)}`)
         if (entry.defaultValue !== undefined) parts.push(`default: ${entry.defaultValue}`)
         const desc = parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(', ')})` : parts[0]
@@ -387,8 +388,8 @@ function globalOptionsLines(root = false, configFlag?: string): string[] {
   return lines
 }
 
-/** Redacts a value, showing only the last 4 characters. */
+/** Redacts a value, showing only the last 4 characters for long values. */
 function redact(value: string): string {
-  if (value.length <= 4) return `****${value.slice(-1)}`
+  if (value.length <= 4) return '****'
   return `****${value.slice(-4)}`
 }

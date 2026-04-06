@@ -1,5 +1,43 @@
 import { Help, z } from 'incur'
 
+describe('redact: short secrets should not leak characters', () => {
+  /**
+   * The internal `redact()` function is exercised through `formatCommand`
+   * by passing an env schema + envSource with a set value.
+   */
+  function getRedactedValue(secret: string): string {
+    const env = z.object({ SECRET: z.string().describe('a secret') })
+    const output = Help.formatCommand('test', {
+      env,
+      envSource: { SECRET: secret },
+      hideGlobalOptions: true,
+    })
+    const match = output.match(/set:\s*(\S+)/)
+    if (!match) throw new Error(`Could not find "set:" in output:\n${output}`)
+    return match[1]!
+  }
+
+  test('1-char secret is fully masked', () => {
+    const redacted = getRedactedValue('x')
+    expect(redacted).not.toContain('x')
+  })
+
+  test('2-char secret does not leak any character', () => {
+    const redacted = getRedactedValue('ab')
+    expect(redacted).not.toContain('b')
+  })
+
+  test('3-char secret does not leak any character', () => {
+    const redacted = getRedactedValue('abc')
+    expect(redacted).not.toContain('c')
+  })
+
+  test('4-char secret does not leak any character', () => {
+    const redacted = getRedactedValue('wxyz')
+    expect(redacted).not.toContain('z')
+  })
+})
+
 describe('formatCommand', () => {
   test('formats leaf command with args and options', () => {
     const result = Help.formatCommand('gh pr list', {
