@@ -382,6 +382,25 @@ describe('split', () => {
     expect(afterFrontmatter).not.toMatch(/^command:/m)
   })
 
+  test('root command uses command description in frontmatter', () => {
+    const cmds: Skill.CommandInfo[] = [
+      { description: 'Fetch a URL' },
+      { name: 'auth login', description: 'Log in' },
+    ]
+    const files = Skill.split('my-cli', cmds, 1)
+    const rootFile = files.find((f) => f.dir === 'my-cli')!
+    expect(rootFile.content).toContain(
+      'description: Fetch a URL. Run `my-cli --help` for usage details.',
+    )
+  })
+
+  test('single-command group uses command description in frontmatter', () => {
+    const files = Skill.split('test', [{ name: 'ping', description: 'Health check' }], 1)
+    expect(files[0]!.content).toContain(
+      'description: Health check. Run `test ping --help` for usage details.',
+    )
+  })
+
   test('depth 1 creates separate file for root command', () => {
     const cmds: Skill.CommandInfo[] = [
       {
