@@ -697,6 +697,7 @@ async function serveImpl(
           depth: options.sync?.depth ?? 1,
           description: options.description,
           include: options.sync?.include,
+          rootCommand: options.rootCommand,
         })
         if (result.length === 0) {
           writeln('No skills found.')

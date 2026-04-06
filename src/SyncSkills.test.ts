@@ -177,6 +177,25 @@ test('list returns empty for CLI with no commands', async () => {
   expect(result).toHaveLength(0)
 })
 
+test('list includes root command skill', async () => {
+  const cli = Cli.create('test', {
+    description: 'A test CLI',
+    run: () => ({ ok: true }),
+  })
+  cli.command('ping', { description: 'Health check', run: () => ({}) })
+
+  const commands = Cli.toCommands.get(cli)!
+  const rootCommand = Cli.toRootDefinition.get(cli as any)!
+  const result = await SyncSkills.list('test', commands, {
+    description: 'A test CLI',
+    rootCommand,
+  })
+
+  const names = result.map((s) => s.name)
+  expect(names).toContain('test')
+  expect(names).toContain('test-ping')
+})
+
 test('list results are sorted alphabetically', async () => {
   const cli = Cli.create('test')
   cli.command('zebra', { description: 'Z command', run: () => ({}) })

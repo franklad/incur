@@ -261,7 +261,10 @@ function envEntries(schema: z.ZodObject<any>) {
 }
 
 /** Extracts option entries from a Zod object schema. */
-function optionEntries(schema: z.ZodObject<any>, alias?: Partial<Record<string, string>> | undefined) {
+function optionEntries(
+  schema: z.ZodObject<any>,
+  alias?: Partial<Record<string, string>> | undefined,
+) {
   const entries: {
     flag: string
     description: string

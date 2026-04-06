@@ -130,15 +130,9 @@ function renderGroup(
   prefix?: string | undefined,
 ): string {
   const groupDesc = prefix ? groups.get(prefix) : undefined
-  const childDescs = cmds.map((c) => c.description).filter(Boolean) as string[]
-  const descParts: string[] = []
-  if (groupDesc) descParts.push(groupDesc.replace(/\.$/, ''))
-  if (childDescs.length > 0)
-    descParts.push(childDescs.map((d) => d.replace(/\.$/, '')).join(', '))
-  const description =
-    descParts.length > 0
-      ? `${descParts.join('. ')}. Run \`${title} --help\` for usage details.`
-      : `Run \`${title} --help\` for usage details.`
+  const description = groupDesc
+    ? `${groupDesc.replace(/\.$/, '')}. Run \`${title} --help\` for usage details.`
+    : `Run \`${title} --help\` for usage details.`
 
   const fm = ['---', `name: ${slugify(title)}`]
   fm.push(`description: ${description}`)

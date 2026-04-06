@@ -286,7 +286,7 @@ describe('split', () => {
     expect(files[0]!.content).toMatchInlineSnapshot(`
       "---
       name: gh-auth
-      description: Authenticate with GitHub. Log in, Check status. Run \`gh auth --help\` for usage details.
+      description: Authenticate with GitHub. Run \`gh auth --help\` for usage details.
       requires_bin: gh
       command: gh auth
       ---
@@ -304,7 +304,7 @@ describe('split', () => {
     expect(files[1]!.content).toMatchInlineSnapshot(`
       "---
       name: gh-pr
-      description: Manage pull requests. List PRs, Create PR. Run \`gh pr --help\` for usage details.
+      description: Manage pull requests. Run \`gh pr --help\` for usage details.
       requires_bin: gh
       command: gh pr
       ---
@@ -321,11 +321,9 @@ describe('split', () => {
     `)
   })
 
-  test('depth 1 without group descriptions uses child descriptions', () => {
+  test('depth 1 without group descriptions uses fallback hint', () => {
     const files = Skill.split('gh', commands, 1)
-    expect(files[0]!.content).toContain(
-      'description: Log in, Check status. Run `gh auth --help` for usage details.',
-    )
+    expect(files[0]!.content).toContain('description: Run `gh auth --help` for usage details.')
   })
 
   test('depth 2 groups by first two segments', () => {

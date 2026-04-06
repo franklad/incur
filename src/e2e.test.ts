@@ -2909,7 +2909,7 @@ describe('.well-known/skills', () => {
     `)
     expect(result.body.skills[0]).toMatchInlineSnapshot(`
       {
-        "description": "Proxy to HTTP API. Run \`app api --help\` for usage details.",
+        "description": "Run \`app api --help\` for usage details.",
         "files": [
           "SKILL.md",
         ],
@@ -2927,7 +2927,7 @@ describe('.well-known/skills', () => {
     expect(result.body).toMatchInlineSnapshot(`
       "---
       name: app-ping
-      description: Health check. Run \`app ping --help\` for usage details.
+      description: Run \`app ping --help\` for usage details.
       requires_bin: app
       command: app ping
       ---

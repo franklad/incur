@@ -136,7 +136,7 @@ export async function list(
 
   const groups = new Map<string, string>()
   if (description) groups.set(name, description)
-  const entries = collectEntries(commands, [], groups)
+  const entries = collectEntries(commands, [], groups, options.rootCommand)
   const files = Skill.split(name, entries, depth, groups)
 
   const skills: list.Skill[] = []
@@ -191,6 +191,18 @@ export declare namespace list {
     description?: string | undefined
     /** Glob patterns for directories containing SKILL.md files to include. */
     include?: string[] | undefined
+    /** Root command definition (when the CLI itself is a command). */
+    rootCommand?:
+      | {
+          description?: string | undefined
+          args?: any
+          env?: any
+          hint?: string | undefined
+          options?: any
+          output?: any
+          examples?: any[] | undefined
+        }
+      | undefined
   }
   /** A skill entry with install status. */
   type Skill = {
