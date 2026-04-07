@@ -1,5 +1,5 @@
 import { Cli, SyncSkills } from 'incur'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -65,6 +65,41 @@ test('uses custom depth', async () => {
 
   // depth 0 = single skill
   expect(result.skills).toHaveLength(1)
+
+  rmSync(tmp, { recursive: true, force: true })
+})
+
+test('sync results are sorted alphabetically', async () => {
+  const tmp = join(tmpdir(), `clac-sync-sort-test-${Date.now()}`)
+  mkdirSync(tmp, { recursive: true })
+
+  const cli = Cli.create('test')
+  const commands = Cli.toCommands.get(cli)!
+  const installDir = join(tmp, 'install')
+  mkdirSync(join(installDir, '.agents', 'skills'), { recursive: true })
+
+  mkdirSync(join(installDir, 'zeta'), { recursive: true })
+  writeFileSync(
+    join(installDir, 'zeta', 'SKILL.md'),
+    ['---', 'name: zeta', 'description: Z skill.', '---', '', '# zeta'].join('\n'),
+  )
+  writeFileSync(
+    join(installDir, 'SKILL.md'),
+    ['---', 'name: test', 'description: Root skill.', '---', '', '# test'].join('\n'),
+  )
+  mkdirSync(join(installDir, 'alpha'), { recursive: true })
+  writeFileSync(
+    join(installDir, 'alpha', 'SKILL.md'),
+    ['---', 'name: alpha', 'description: A skill.', '---', '', '# alpha'].join('\n'),
+  )
+
+  const result = await SyncSkills.sync('test', commands, {
+    global: false,
+    cwd: installDir,
+    include: ['zeta', '_root', 'alpha'],
+  })
+
+  expect(result.skills.map((s) => s.name)).toEqual(['alpha', 'test', 'zeta'])
 
   rmSync(tmp, { recursive: true, force: true })
 })

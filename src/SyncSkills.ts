@@ -73,7 +73,7 @@ export async function sync(
     const hashEntries = collectEntries(commands, [], undefined, options.rootCommand)
     writeMeta(name, Skill.hash(hashEntries), [...currentNames])
 
-    return { skills, paths, agents }
+    return { skills: skills.sort((a, b) => a.name.localeCompare(b.name)), paths, agents }
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true })
   }
