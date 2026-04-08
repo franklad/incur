@@ -10,10 +10,9 @@ export async function register(
   name: string,
   options: register.Options = {},
 ): Promise<register.Result> {
-  const isGlobalBinary = !process.argv[1]?.match(/node_modules[/\\]/)
   const runner = detectRunner()
   const command = options.command
-    ?? (isGlobalBinary ? `${name} --mcp` : `${runner} ${detectPackageSpecifier(name)} --mcp`)
+    ?? (nodeModulesRoot() ? `${runner} ${detectPackageSpecifier(name)} --mcp` : `${name} --mcp`)
   const targetAgents = options.agents ?? []
   const ampOnly = targetAgents.length === 1 && targetAgents[0] === 'amp'
 
@@ -100,16 +99,19 @@ export declare namespace register {
   }
 }
 
+/** @internal Returns the node_modules root path if running from a local install, or `null` for global installs. */
+function nodeModulesRoot(): string | null {
+  const match = process.argv[1]?.match(/^(.+)[/\\]node_modules[/\\]/)
+  return match?.[1] ?? null
+}
+
 /** @internal Detects the package specifier used to run this CLI (handles dlx/npx URL and version installs). */
 export function detectPackageSpecifier(name: string): string {
-  const bin = process.argv[1]
-  if (!bin) return name
-
-  const match = bin.match(/^(.+)[/\\]node_modules[/\\]/)
-  if (!match) return name
+  const root = nodeModulesRoot()
+  if (!root) return name
 
   try {
-    const pkg = JSON.parse(readFileSync(join(match[1]!, 'package.json'), 'utf-8'))
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'))
     const deps = pkg.dependencies ?? {}
     const spec = deps[name]
     if (!spec || Object.keys(deps).length !== 1) return name
