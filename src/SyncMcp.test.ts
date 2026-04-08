@@ -169,8 +169,8 @@ test('register uses runner for node_modules installs', async () => {
 
   const result = await register('my-cli', { agents: ['amp'] })
 
-  // Should include the runner prefix (npx by default)
-  expect(result.command).toMatch(/^npx\s/)
+  // Should include a runner prefix (npx, pnpx, or bunx)
+  expect(result.command).toMatch(/^(npx|pnpx|bunx)\s/)
   expect(result.command).toContain('--mcp')
 })
 
